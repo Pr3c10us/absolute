@@ -5,7 +5,7 @@ Convert comic book pages into cinematic prose for text-to-speech narration in th
 
 ## Output Format
 
-Return a JSON array with **exactly 1 or 2 segments**—no more. Each element has a "narration" string and a "panel" integer indicating which panel best accompanies that narration. Consolidate the page's narrative into these segments; do not create a segment per panel.
+Return a JSON array. Each element has a "narration" string and a "panel" integer indicating which panel best accompanies that narration. This is not a 1-to-1 mapping—chunk the narrative naturally and choose panels that match each moment's visual impact.
 
 \`\`\`json
 [
@@ -35,17 +35,25 @@ Input: 4 panels—tense alley confrontation in rain.
 \`\`\`json
 [
   {
-    "narration": "Rain hammers the cobblestones, catching the sickly glow of the streetlamps. Elena pulls her coat tighter. Footsteps behind her—they aren't hers. She stops. [soft] \\"I know you're there.\\" Her words dissolve into the downpour.",
+    "narration": "Rain hammers the cobblestones, catching the sickly glow of the streetlamps. Elena pulls her coat tighter. Footsteps behind her. They aren't hers.",
     "panel": 1
   },
   {
-    "narration": "A figure peels from the shadows. Tall. Deliberate. [deep] \\"Clever girl. But not clever enough.\\" Elena turns to face him, a smirk tugging at her lips. \\"We'll see about that.\\"",
+    "narration": "She stops. [soft] \\"I know you're there.\\" Her words dissolve into the downpour.",
+    "panel": 2
+  },
+  {
+    "narration": "A figure peels from the shadows. Tall. Deliberate. [deep] \\"Clever girl. But not clever enough.\\"",
     "panel": 3
+  },
+  {
+    "narration": "Elena turns to face him. A smirk tugs at her lips. \\"We'll see about that.\\"",
+    "panel": 4
   }
 ]
 \`\`\`
 
-Notice: The entire 4-panel sequence is condensed into 2 segments. Tags mark character voice shifts, not narration tone. No segment starts with a tag.
+Notice: Two tags total across four segments. Both mark character voice shifts, not narration tone. No segment starts with a tag. The final line has no tag because Elena's confident tone comes through in the writing itself.
 
 ---
 

@@ -16,42 +16,40 @@ export async function CreateVideoFromImages(
         height?: number;
     } = {}
 ): Promise<void> {
-    const {fps = 30, width = 1920, height = 1080} = options;
-
-    // Create a temporary concat file for FFmpeg
-    const tempDir = path.join(process.cwd(), "temp");
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, {recursive: true});
-    }
-
-    const concatFilePath = path.join(tempDir, `concat_${Date.now()}.txt`);
+    const { fps = 30, width = 1920, height = 1080 } = options;
 
     if (videoData.length === 0) {
         throw new Error("videoData array cannot be empty");
     }
 
-    // Build concat file content
-    // Format: file 'path' \n duration X
-    const concatContent = videoData
-        .map(({panel, duration}) => {
-            const absolutePath = path.resolve(panel).replace(/\\/g, "/");
-            return `file '${absolutePath}'\nduration ${duration}`;
-        })
-        .join("\n");
-
-    // Add the last image again (FFmpeg concat demuxer quirk)
-    const lastItem = videoData[videoData.length - 1]!;
-    const lastImage = path.resolve(lastItem.panel).replace(/\\/g, "/");
-    const finalContent = `${concatContent}\nfile '${lastImage}'`;
-
-    fs.writeFileSync(concatFilePath, finalContent);
-
     return new Promise((resolve, reject) => {
-        ffmpeg()
-            .input(concatFilePath)
-            .inputOptions(["-f concat", "-safe 0"])
+        let command = ffmpeg();
+
+        // Add each image as a separate input with loop and duration
+        videoData.forEach(({ panel, duration }) => {
+            command = command
+                .input(panel)
+                .inputOptions(["-loop 1", `-t ${duration}`]);
+        });
+
+        // Build the filter_complex string
+        // Scale each input, then concat them all
+        const scaleFilters = videoData
+            .map((_, i) =>
+                `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+                `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v${i}]`
+            )
+            .join("; ");
+
+        const concatInputs = videoData.map((_, i) => `[v${i}]`).join("");
+        const concatFilter = `${concatInputs}concat=n=${videoData.length}:v=1:a=0[outv]`;
+
+        const filterComplex = `${scaleFilters}; ${concatFilter}`;
+
+        command
+            .complexFilter(filterComplex)
             .outputOptions([
-                `-vf scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
+                "-map [outv]",
                 `-r ${fps}`,
                 "-pix_fmt yuv420p",
                 "-c:v libx264",
@@ -66,22 +64,15 @@ export async function CreateVideoFromImages(
                 console.log(`Processing: ${progress.percent?.toFixed(1)}% done`);
             })
             .on("end", () => {
-                // Cleanup temp file
-                fs.unlinkSync(concatFilePath);
                 console.log("Video created successfully:", outputPath);
                 resolve();
             })
             .on("error", (err) => {
-                // Cleanup temp file on error
-                if (fs.existsSync(concatFilePath)) {
-                    fs.unlinkSync(concatFilePath);
-                }
                 reject(new Error(`FFmpeg error: ${err.message}`));
             })
             .run();
     });
 }
-
 export async function MergeAudioToVideo(
     videoPath: string,
     audioPath: string,
