@@ -1,4 +1,4 @@
-import type {AIResponse, Voice, File} from "."
+import type { AIResponse, Voice, File } from "."
 
 export default interface AIRepository {
     /**
@@ -16,4 +16,14 @@ export default interface AIRepository {
      * @returns A Promise that resolves to the generated text.
      */
     generateText(prompt: string, files?: File[]): Promise<AIResponse>
+
+    /**
+     * Generates audio using the Live API as a workaround for rate limits on normal audio models.
+     * Uses WebSocket-based streaming to connect to the Live API with built-in retry logic.
+     * @param text The text to generate audio from.
+     * @param voice The voice to use for the audio.
+     * @param maxRetries Maximum number of retry attempts (default: 3).
+     * @returns A Promise that resolves to the generated audio as a base64 string.
+     */
+    generateAudioLive(text: string, voice?: Voice, maxRetries?: number): Promise<AIResponse>
 }

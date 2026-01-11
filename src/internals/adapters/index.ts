@@ -1,6 +1,6 @@
 import AppSecrets from "../../pkg/secret";
 import {GoogleGenAI} from "@google/genai";
-import AIRepository from "../domains/ai/repo";
+import type AIRepository from "../domains/ai/repo";
 import GeminiAI from "./ai/gemini";
 
 export type AdapterParameters = {

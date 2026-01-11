@@ -26,6 +26,7 @@ export type GeminiConfiguration = {
     fastModel: string
     audioModel: string
     fastAudioModel: string
+    liveModel: string
 }
 
 export type SMTPCredentials = {
@@ -118,6 +119,7 @@ export default class AppSecrets {
             fastModel: this.getEnvironmentVariableOrFallback("GEMINI_FAST_MODEL", "gemini-3-flash-preview"),
             audioModel: this.getEnvironmentVariableOrFallback("GEMINI_AUDIO_MODEL", "gemini-2.5-pro-preview-tts"),
             fastAudioModel: this.getEnvironmentVariableOrFallback("GEMINI_FAST_AUDIO_MODEL", "gemini-2.5-flash-preview-tts"),
+            liveModel: this.getEnvironmentVariableOrFallback("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-preview-12-2025"),
         }
 
         // // this.googleAPIKey = this.getEnvironmentVariable("GOOGLE_API_KEY")

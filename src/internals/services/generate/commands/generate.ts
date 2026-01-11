@@ -2,18 +2,19 @@ import type AppSecrets from "../../../../pkg/secret";
 import type AIRepository from "../../../domains/ai/repo.ts";
 import fs from 'fs/promises';
 import path from "path";
-import { readdir } from "fs/promises";
-import { join } from "path";
+import {readdir} from "fs/promises";
+import {join} from "path";
 import mime from "mime";
 import NarrationPrompt from "../../../../pkg/prompts/narration.ts";
 import SliceComic from "../../../../pkg/utils/extractCBR.ts";
-import { WithRetry } from "../../../../pkg/utils/retry.ts";
-import type { Voice } from "../../../domains/ai";
+import {WithRetry} from "../../../../pkg/utils/retry.ts";
+import type {Voice} from "../../../domains/ai";
 import {
     GetWavDurationFromBuffer, MergeWavFiles,
     SaveWaveFile
 } from "../../../../pkg/utils/audio";
-import { CreateVideoFromImages, MergeAudioToVideo } from "../../../../pkg/utils/video.ts";
+import {CreateVideoFromImages, MergeAudioToVideo} from "../../../../pkg/utils/video.ts";
+import {AudioPrompt} from "../../../../pkg/prompts/live.ts";
 
 type NarrationPanel = {
     narration: string;
@@ -49,7 +50,7 @@ export default class Generate {
             yield* SliceComic(file.path, dir);
 
             // loop over images in extracted folder
-            const images = (await readdir(dir, { withFileTypes: true }))
+            const images = (await readdir(dir, {withFileTypes: true}))
                 .filter(d => d.isFile())
                 .map(d => ({
                     path: join(dir, d.name),
@@ -61,21 +62,21 @@ export default class Generate {
             for (let i = 0; i < images.length; i++) {
                 let image = images[i]
                 if (!image) continue
-                yield { event: "update", data: { message: "generating narration" } }
-                const { data, dollars } = await WithRetry(() => this.generateScript(image))
-                yield { event: "narrations", data: { narrations: data } }
+                yield {event: "update", data: {message: "generating narration"}}
+                const {data, dollars} = await WithRetry(() => this.generateScript(image))
+                yield {event: "narrations", data: {narrations: data}}
                 totalDorris += dollars
-                yield { event: "update", data: { message: "narration generated" } }
+                yield {event: "update", data: {message: "narration generated"}}
 
                 // loop over script narrations eg [{narration: "...", panel: 0]
                 let videoData: { panel: string; duration: number }[] = [];
-                const { dir, name } = path.parse(image.path);
+                const {dir, name} = path.parse(image.path);
                 const audioBuffers: Buffer[] = [];
                 for (let j = 0; j < data.length; j++) {
                     let datum = data[j];
                     if (!datum) continue;
 
-                    const { data: raw, dollars } = await WithRetry(() =>
+                    const {data: raw, dollars} = await WithRetry(() =>
                         this.generateAudio(voice, style, datum.narration)
                     );
                     totalDorris += dollars;
@@ -87,9 +88,9 @@ export default class Generate {
                     audioBuffers.push(audioBuffer);
                     audioBuffers.push(this.generateSilence(1));
                     const duration = this.getBufferDuration(audioBuffer);
-                    videoData.push({ panel, duration: duration + 1 });
+                    videoData.push({panel, duration: duration + 1});
                 }
-                yield { event: "video", data: videoData }
+                yield {event: "video", data: videoData}
                 const iDir = path.resolve(dir, name);
                 const audioPath = path.join(iDir, `.wav`);
 
@@ -113,23 +114,9 @@ export default class Generate {
                         volume: 0.8,
                     }
                 );
-                // generate audio for each narration
-
-                // store audio into a folder
-
-                // extract duration along with the panel number store in an array to be used when creating video
-
-                // merge audio into 1 and remove old ones
-
-                // create a slideshow/video using the split panels of the image (stored in a folder with the same name just without the file extension)
-                // where each panel is displayed for its accompanying duration before changing to the next
-
-                // merge with audio
-
-                // store
             }
 
-            console.log({ totalDorris })
+            console.log({totalDorris})
         }
     }
 
@@ -149,20 +136,20 @@ export default class Generate {
     }
 
     async generateScript(image: File): Promise<Response<NarrationPanel[]>> {
-        let { response, dollars } = await this.aiRepository.generateText(NarrationPrompt, [{
+        let {response, dollars} = await this.aiRepository.generateText(NarrationPrompt, [{
             path: image.path,
             mimeType: image.mimeType
         }])
         console.log(response)
-        return { data: this.parseNarrationScript(response), dollars }
+        return {data: this.parseNarrationScript(response), dollars}
     }
 
     async generateAudio(voice: Voice, style: string, narration: string): Promise<Response<string>> {
-        let { response, dollars } = await this.aiRepository.generateAudio(
-            `${style}: \n${narration}`,
+        let {response, dollars} = await this.aiRepository.generateAudioLive(
+            AudioPrompt(narration, style),
             voice
         )
-        return { data: response, dollars }
+        return {data: response, dollars}
     }
 
     parseNarrationScript(raw: string): NarrationPanel[] {
