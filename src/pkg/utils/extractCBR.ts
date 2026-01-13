@@ -6,6 +6,7 @@ import * as tar from 'tar';
 import sharp, { type Metadata, type Sharp } from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import { DetectAndExtractPanels } from "./segments.ts";
 
 interface Panel {
     minX: number;
@@ -77,6 +78,81 @@ function generateOverlaySvg(panels: OutputPanel[], imageWidth: number, imageHeig
 
     svgContent += '</svg>';
     return Buffer.from(svgContent);
+}
+
+/**
+ * Adds a bold page number to an image with contrasting colors.
+ * Saves the numbered image to a separate output directory, preserving original.
+ * Detects background brightness and uses white text on dark backgrounds, black text on light backgrounds.
+ */
+async function addPageNumberToImage(imagePath: string, pageNumber: number, outputDir: string): Promise<void> {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const image = sharp(imageBuffer);
+    const metadata = await image.metadata();
+    const ext = path.extname(imagePath);
+    const baseName = path.basename(imagePath);
+
+    if (!metadata.width || !metadata.height) {
+        throw new Error('Could not read image dimensions');
+    }
+
+    // Sample the top-left corner to determine background brightness
+    const sampleSize = Math.min(100, Math.floor(Math.min(metadata.width, metadata.height) / 4));
+    const { data: sampleData } = await image
+        .clone()
+        .extract({ left: 10, top: 10, width: sampleSize, height: sampleSize })
+        .grayscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+    // Calculate average brightness (0-255)
+    let totalBrightness = 0;
+    for (let i = 0; i < sampleData.length; i++) {
+        totalBrightness += sampleData[i]!;
+    }
+    const avgBrightness = totalBrightness / sampleData.length;
+
+    // Choose contrasting colors based on background brightness
+    const isLightBackground = avgBrightness > 128;
+    const textColor = isLightBackground ? '#000000' : '#FFFFFF';
+    const bgColor = isLightBackground ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)';
+    const strokeColor = isLightBackground ? '#FFFFFF' : '#000000';
+
+    // Calculate font size based on image dimensions (proportional sizing)
+    const fontSize = Math.max(48, Math.floor(Math.min(metadata.width, metadata.height) / 12));
+    const padding = Math.floor(fontSize * 0.15);
+    const labelWidth = fontSize * 1.2;
+    const labelHeight = fontSize * 1.1;
+    const cornerOffset = Math.floor(fontSize * 0.3);
+
+    // Position at bottom-left
+    const labelX = cornerOffset;
+    const labelY = metadata.height - labelHeight - cornerOffset;
+
+    // Create SVG overlay with bold page number
+    const svgContent = `
+        <svg width="${metadata.width}" height="${metadata.height}" xmlns="http://www.w3.org/2000/svg">
+            <rect x="${labelX}" y="${labelY}" width="${labelWidth}" height="${labelHeight}" 
+                fill="${bgColor}" rx="${padding}" ry="${padding}" 
+                stroke="${strokeColor}" stroke-width="2"/>
+            <text x="${labelX + labelWidth / 2}" y="${labelY + labelHeight * 0.78}" 
+                font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" 
+                fill="${textColor}" text-anchor="middle">${pageNumber}</text>
+        </svg>
+    `;
+
+    const overlaySvg = Buffer.from(svgContent);
+
+    // Create output directory if it doesn't exist
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Save numbered image to output directory
+    const outputPath = path.join(outputDir, baseName);
+    await sharp(imageBuffer)
+        .composite([{ input: overlaySvg, top: 0, left: 0 }])
+        .toFile(outputPath);
 }
 
 async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = false): Promise<DetectResult> {
@@ -303,8 +379,6 @@ async function* SliceComic(
     }
     fs.mkdirSync(outputDir, { recursive: true });
 
-    yield { event: 'update', data: { message: `Extracting contents from book` } };
-
     try {
         let extractedCount: number;
 
@@ -325,7 +399,7 @@ async function* SliceComic(
                 throw new Error(`Unsupported format: ${format}`);
         }
 
-        yield { event: 'update', data: { message: `Extracted ${extractedCount} files. Preparing for panel detection...` } };
+        yield { event: 'update', data: { message: `extracted ${extractedCount} files.` } };
 
     } catch (error) {
         const err = error as Error;
@@ -355,17 +429,31 @@ async function* SliceComic(
 
     const imageFiles = findImages(outputDir).sort();
 
-    yield { event: 'update', data: { message: 'Starting smart panel detection and cropping...' } };
+    // Create numbers folder for storing numbered images separately
+    const numbersDir = path.join(outputDir, 'numbers');
+    if (!fs.existsSync(numbersDir)) {
+        fs.mkdirSync(numbersDir, { recursive: true });
+    }
+
+    // Add page numbers to each image and save to numbers folder (preserves originals)
+    for (let i = 0; i < imageFiles.length; i++) {
+        const imagePath = imageFiles[i]!;
+        await addPageNumberToImage(imagePath, i + 1, numbersDir);
+        yield { event: 'update', data: { message: `page number added to page ${i + 1} of ${imageFiles.length} pages` } };
+    }
+    yield { event: 'update', data: { message: 'all pages have been numbered.' } };
+
     for (let i = 0; i < imageFiles.length; i++) {
         const imagePath = imageFiles[i]!;
         const imageFile = path.basename(imagePath);
 
-        yield { event: 'update', data: { message: `Processing page ${i + 1} of ${imageFiles.length}...`, } };
 
-        await detectAndCropPanels(imagePath, true);
+        await DetectAndExtractPanels(imagePath, true);
+        // await detectAndCropPanels(imagePath, true);
+        yield { event: 'update', data: { message: `panels detected and cropped for page ${i + 1} of ${imageFiles.length} pages`, } };
     }
 
-    yield { event: 'update', data: { message: 'Process complete. All panels have been extracted.', format } };
+    yield { event: 'update', data: { message: 'all panels have been extracted.' } };
 }
 
 export default SliceComic;

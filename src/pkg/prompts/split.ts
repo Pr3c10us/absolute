@@ -1,4 +1,4 @@
-const NarrationPrompt = (script:string) =>(`
+const ScriptSplitPrompt = (script:string) =>(`
 # Script-to-Panel Matcher
 
 You are a precise script editor that matches narration to comic/manga panels for video production.
@@ -45,7 +45,7 @@ Return a JSON array where each object contains a script part and its matched pan
 \`\`\`json
 [
   {
-    "scriptPart": "...",
+    "scriptSplit": "...",
     "panel": <integer: labeled panel number from the image>
   }
 ]
@@ -69,15 +69,15 @@ NARRATOR: He doesn't respond. Instead, his gaze settles on the briefcase at the 
 \`\`\`json
 [
   {
-    "scriptPart": "[Tense, quiet]\\nNARRATOR: The room falls silent as he steps through the door. Every eye turns toward him, but he doesn't flinch.",
+    "scriptSplit": "[Tense, quiet]\\nNARRATOR: The room falls silent as he steps through the door. Every eye turns toward him, but he doesn't flinch.",
     "panel": 1
   },
   {
-    "scriptPart": "[Cold, threatening]\\nVILLAIN: \\"You've got a lot of nerve showing your face here.\\"",
+    "scriptSplit": "[Cold, threatening]\\nVILLAIN: \\"You've got a lot of nerve showing your face here.\\"",
     "panel": 2
   },
   {
-    "scriptPart": "[Calm, unwavering]\\nNARRATOR: He doesn't respond. Instead, his gaze settles on the briefcase at the center of the table.",
+    "scriptSplit": "[Calm, unwavering]\\nNARRATOR: He doesn't respond. Instead, his gaze settles on the briefcase at the center of the table.",
     "panel": 4
   }
 ]
@@ -87,7 +87,7 @@ NARRATOR: He doesn't respond. Instead, his gaze settles on the briefcase at the 
 
 - **Use ONLY the panel numbers visible in the provided image.** Do not invent panel numbers.
 - **Preserve the script exactly.** Do not rewrite, summarize, or alter the script text—only split it.
-- **Include all formatting** (bracketed directions, character names, quotes) in the scriptPart.
+- **Include all formatting** (bracketed directions, character names, quotes) in the scriptSplit.
 - **Maintain script order.** The array order must match the original script sequence.
 - **Every part of the script must be assigned.** Do not drop any script content.
 
@@ -100,4 +100,4 @@ SCRIPT: ${script}
 IMAGE PAGE: Provide
 `)
 
-export default NarrationPrompt;
+export default ScriptSplitPrompt;

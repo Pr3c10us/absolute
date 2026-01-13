@@ -1,20 +1,6 @@
-/**
- * Comic Book Panel Segmentation for Node.js
- *
- * Install dependencies:
- *   npm install sharp
- *   npm install -D @types/node
- *
- * Usage:
- *   npx ts-node comic-segmenter.ts input.jpg
- *   npx ts-node comic-segmenter.ts ./comics/    # process all images in folder
- */
-
-import sharp, { Metadata, Sharp } from "sharp";
+import sharp, { type Metadata, type Sharp } from "sharp";
 import * as fs from "fs";
 import * as path from "path";
-
-// ============ Types ============
 
 interface BoundingBox {
     minRow: number;
@@ -35,15 +21,13 @@ interface DetectResult {
     success: boolean;
 }
 
-// ============ Image Processing ============
-
 function rgbToGrayscale(data: Buffer, width: number, height: number, channels: number): Float32Array {
     const grayscale = new Float32Array(width * height);
     for (let i = 0; i < width * height; i++) {
         if (channels === 1) {
-            grayscale[i] = data[i];
+            grayscale[i] = data[i]!;
         } else {
-            grayscale[i] = 0.299 * data[i * channels] + 0.587 * data[i * channels + 1] + 0.114 * data[i * channels + 2];
+            grayscale[i] = 0.299 * data[i * channels]! + 0.587 * data[i * channels + 1]! + 0.114 * data[i * channels + 2]!;
         }
     }
     return grayscale;
@@ -59,10 +43,10 @@ function gaussianBlur(image: Float32Array, width: number, height: number, sigma 
         for (let x = 0; x < size; x++) {
             const dx = x - center, dy = y - center;
             kernel[y * size + x] = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
-            sum += kernel[y * size + x];
+            sum += kernel[y * size + x]!;
         }
     }
-    for (let i = 0; i < kernel.length; i++) kernel[i] /= sum;
+    for (let i = 0; i < kernel.length; i++) kernel[i] = kernel[i]! / sum;
 
     const result = new Float32Array(width * height);
     const halfK = Math.floor(size / 2);
@@ -74,7 +58,7 @@ function gaussianBlur(image: Float32Array, width: number, height: number, sigma 
                 for (let kx = 0; kx < size; kx++) {
                     const iy = Math.min(Math.max(y + ky - halfK, 0), height - 1);
                     const ix = Math.min(Math.max(x + kx - halfK, 0), width - 1);
-                    s += image[iy * width + ix] * kernel[ky * size + kx];
+                    s += image[iy * width + ix]! * kernel[ky * size + kx]!;
                 }
             }
             result[y * width + x] = s;
@@ -86,7 +70,6 @@ function gaussianBlur(image: Float32Array, width: number, height: number, sigma 
 function cannyEdgeDetection(grayscale: Float32Array, width: number, height: number): Uint8Array {
     const blurred = gaussianBlur(grayscale, width, height, 1.4);
 
-    // Sobel gradients
     const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
     const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
     const magnitude = new Float32Array(width * height);
@@ -97,10 +80,10 @@ function cannyEdgeDetection(grayscale: Float32Array, width: number, height: numb
             let gx = 0, gy = 0;
             for (let ky = -1; ky <= 1; ky++) {
                 for (let kx = -1; kx <= 1; kx++) {
-                    const pixel = blurred[(y + ky) * width + (x + kx)];
+                    const pixel = blurred[(y + ky) * width + (x + kx)]!;
                     const ki = (ky + 1) * 3 + (kx + 1);
-                    gx += pixel * sobelX[ki];
-                    gy += pixel * sobelY[ki];
+                    gx += pixel * sobelX[ki]!;
+                    gy += pixel * sobelY[ki]!;
                 }
             }
             magnitude[y * width + x] = Math.sqrt(gx * gx + gy * gy);
@@ -108,41 +91,38 @@ function cannyEdgeDetection(grayscale: Float32Array, width: number, height: numb
         }
     }
 
-    // Non-maximum suppression
     const suppressed = new Float32Array(width * height);
     for (let y = 1; y < height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
             const idx = y * width + x;
-            const angle = ((direction[idx] * 180) / Math.PI + 180) % 180;
-            const mag = magnitude[idx];
+            const angle = ((direction[idx]! * 180) / Math.PI + 180) % 180;
+            const mag = magnitude[idx]!;
             let n1 = 0, n2 = 0;
 
             if (angle < 22.5 || angle >= 157.5) {
-                n1 = magnitude[idx - 1]; n2 = magnitude[idx + 1];
+                n1 = magnitude[idx - 1]!; n2 = magnitude[idx + 1]!;
             } else if (angle < 67.5) {
-                n1 = magnitude[(y - 1) * width + x + 1]; n2 = magnitude[(y + 1) * width + x - 1];
+                n1 = magnitude[(y - 1) * width + x + 1]!; n2 = magnitude[(y + 1) * width + x - 1]!;
             } else if (angle < 112.5) {
-                n1 = magnitude[(y - 1) * width + x]; n2 = magnitude[(y + 1) * width + x];
+                n1 = magnitude[(y - 1) * width + x]!; n2 = magnitude[(y + 1) * width + x]!;
             } else {
-                n1 = magnitude[(y - 1) * width + x - 1]; n2 = magnitude[(y + 1) * width + x + 1];
+                n1 = magnitude[(y - 1) * width + x - 1]!; n2 = magnitude[(y + 1) * width + x + 1]!;
             }
 
             suppressed[idx] = mag >= n1 && mag >= n2 ? mag : 0;
         }
     }
 
-    // Double threshold - find max without spreading
     let max = 0;
     for (let i = 0; i < suppressed.length; i++) {
-        if (suppressed[i] > max) max = suppressed[i];
+        if (suppressed[i]! > max) max = suppressed[i]!;
     }
     const high = max * 0.15, low = max * 0.05;
     const edges = new Uint8Array(width * height);
     for (let i = 0; i < suppressed.length; i++) {
-        edges[i] = suppressed[i] >= high ? 255 : suppressed[i] >= low ? 128 : 0;
+        edges[i] = suppressed[i]! >= high ? 255 : suppressed[i]! >= low ? 128 : 0;
     }
 
-    // Hysteresis
     let changed = true;
     while (changed) {
         changed = false;
@@ -181,7 +161,7 @@ function dilate(image: Uint8Array, width: number, height: number, iterations = 2
                 let maxVal = 0;
                 for (let dy = -1; dy <= 1; dy++) {
                     for (let dx = -1; dx <= 1; dx++) {
-                        maxVal = Math.max(maxVal, result[(y + dy) * width + (x + dx)]);
+                        maxVal = Math.max(maxVal, result[(y + dy) * width + (x + dx)]!);
                     }
                 }
                 temp[y * width + x] = maxVal;
@@ -285,7 +265,7 @@ function mergeOverlapping(regions: BoundingBox[]): BoundingBox[] {
         let merged = false;
 
         for (let i = 0; i < panels.length; i++) {
-            const a = region, b = panels[i];
+            const a = region, b = panels[i]!;
             if (a.minRow < b.maxRow && a.maxRow > b.minRow && a.minCol < b.maxCol && a.maxCol > b.minCol) {
                 panels[i] = {
                     minRow: Math.min(a.minRow, b.minRow),
@@ -334,15 +314,15 @@ function clusterPanels(bboxes: BoundingBox[], axis: "row" | "col" = "row", depth
         if (!added) clusters.push([bbox]);
     }
 
-    if (clusters.length === 1 && clusters[0].length === bboxes.length) {
+    if (clusters.length === 1 && clusters[0]!.length === bboxes.length) {
         const sortKey = axis === "row" ? "minRow" : "minCol";
         return [...bboxes].sort((a, b) => a[sortKey] - b[sortKey]);
     }
 
-    clusters.sort((a, b) => (axis === "row" ? a[0].minRow - b[0].minRow : a[0].minCol - b[0].minCol));
+    clusters.sort((a, b) => (axis === "row" ? a[0]!.minRow - b[0]!.minRow : a[0]!.minCol - b[0]!.minCol));
 
-    return clusters.map((c) =>
-        c.length > 1 ? clusterPanels(c, axis === "row" ? "col" : "row", depth + 1) : c[0]
+    return clusters.map((c): NestedPanels =>
+        c.length > 1 ? clusterPanels(c, axis === "row" ? "col" : "row", depth + 1) : c[0]!
     );
 }
 
@@ -353,8 +333,6 @@ function* flattenPanels(nested: NestedPanels[]): Generator<BoundingBox> {
     }
 }
 
-// ============ SVG Overlay Generation ============
-
 function generateOverlaySvg(panels: OutputPanel[], width: number, height: number): Buffer {
     const panelRects = panels.map((p, i) => {
         const cornerLen = Math.min(20, p.width / 6, p.height / 6);
@@ -362,7 +340,7 @@ function generateOverlaySvg(panels: OutputPanel[], width: number, height: number
         return `
       <!-- Panel ${i + 1} -->
       <rect x="${p.left}" y="${p.top}" width="${p.width}" height="${p.height}" 
-            fill="rgba(255,51,102,0.08)" stroke="#ff3366" stroke-width="3"/>
+            fill="none" stroke="#ff3366" stroke-width="3"/>
       
       <!-- Corner accents -->
       <path d="M${p.left},${p.top + cornerLen} L${p.left},${p.top} L${p.left + cornerLen},${p.top}" 
@@ -375,41 +353,30 @@ function generateOverlaySvg(panels: OutputPanel[], width: number, height: number
             fill="none" stroke="#ffdd00" stroke-width="5"/>
       
       <!-- Label -->
-      <rect x="${p.left + 8}" y="${p.top + 8}" width="${65 + (i >= 9 ? 12 : 0)}" height="28" rx="4" 
+      <rect x="${p.left + 8}" y="${p.top + p.height - 62}" width="${130 + (i >= 9 ? 12 : 0)}" height="54" rx="4" 
             fill="rgba(0,0,0,0.85)" stroke="#ff3366" stroke-width="2"/>
-      <text x="${p.left + 16}" y="${p.top + 27}" font-family="Arial, sans-serif" font-size="16" 
+      <text x="${p.left + 16}" y="${p.top + p.height - 17}" font-family="Arial, sans-serif" font-size="32" 
             font-weight="bold" fill="white">Panel ${i + 1}</text>
     `;
     }).join('\n');
 
-    const titleWidth = 150 + (panels.length >= 10 ? 10 : 0);
-    const titleX = (width - titleWidth) / 2;
-
     const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
       <!-- Title -->
-      <rect x="${titleX}" y="15" width="${titleWidth}" height="36" rx="6" fill="rgba(0,0,0,0.85)"/>
-      <text x="${width / 2}" y="40" font-family="Arial, sans-serif" font-size="18" 
-            font-weight="bold" fill="#ffdd00" text-anchor="middle">Detected ${panels.length} Panels</text>
-      
+
       ${panelRects}
-    </svg>
-  `;
+    </svg>`
 
     return Buffer.from(svg);
 }
 
-// ============ Main Detection Function ============
-
-async function detectAndExtractPanels(imagePath: string, deleteOriginal: boolean = false): Promise<DetectResult> {
+export async function DetectAndExtractPanels(imagePath: string, deleteOriginal: boolean = false): Promise<DetectResult> {
     const fullPath = path.resolve(imagePath);
     const dir = path.dirname(fullPath);
     const name = path.basename(fullPath, path.extname(fullPath));
     const ext = path.extname(fullPath);
 
     try {
-        console.log(`Processing: ${fullPath}`);
-
         const imageBuffer = fs.readFileSync(fullPath);
         const image: Sharp = sharp(imageBuffer);
         const metadata: Metadata = await image.metadata();
@@ -418,9 +385,6 @@ async function detectAndExtractPanels(imagePath: string, deleteOriginal: boolean
             throw new Error('Could not read image dimensions');
         }
 
-        console.log(`  Image size: ${metadata.width}x${metadata.height}`);
-
-        // Process at reduced resolution for speed
         const processingWidth = Math.min(1500, metadata.width);
         const scale = metadata.width / processingWidth;
 
@@ -435,26 +399,16 @@ async function detectAndExtractPanels(imagePath: string, deleteOriginal: boolean
         const height = info.height;
         const channels = info.channels;
 
-        console.log(`  Processing at: ${width}x${height}`);
-
-        // Segmentation pipeline
-        console.log("  Converting to grayscale...");
         const grayscale = rgbToGrayscale(buffer, width, height, channels);
 
-        console.log("  Detecting edges...");
         const edges = cannyEdgeDetection(grayscale, width, height);
 
-        console.log("  Dilating edges...");
         const dilated = dilate(edges, width, height, 2);
 
-        console.log("  Filling holes...");
         const filled = binaryFillHoles(dilated, width, height);
 
-        console.log("  Labeling regions...");
         const { labels, numLabels } = labelComponents(filled, width, height);
-        console.log(`  Found ${numLabels} regions`);
 
-        console.log("  Merging overlapping regions...");
         const regions = getRegionBoxes(labels, numLabels, width, height);
         const merged = mergeOverlapping(regions);
 
@@ -464,7 +418,6 @@ async function detectAndExtractPanels(imagePath: string, deleteOriginal: boolean
             (b) => (b.maxRow - b.minRow) * (b.maxCol - b.minCol) >= 0.01 * imageArea
         );
 
-        console.log("  Ordering panels...");
         const clustered = clusterPanels(filteredPanels);
         const orderedPanels = [...flattenPanels(clustered)];
 
@@ -476,10 +429,8 @@ async function detectAndExtractPanels(imagePath: string, deleteOriginal: boolean
             height: Math.ceil((p.maxRow - p.minRow) * scale),
         }));
 
-        console.log(`  Detected ${outputPanels.length} panels`);
 
         if (outputPanels.length === 0) {
-            console.log("  No panels detected, skipping extraction");
             return { panels: 0, success: true };
         }
 
@@ -503,23 +454,20 @@ async function detectAndExtractPanels(imagePath: string, deleteOriginal: boolean
 
             const outputPath = path.join(panelsDir, `${count}${ext}`);
             await sharp(imageBuffer).extract(extractRegion).toFile(outputPath);
-            console.log(`  Saved: ${outputPath} (${extractRegion.width}x${extractRegion.height})`);
             count++;
         }
 
         // Generate annotated image with SVG overlay
         const overlaySvg = generateOverlaySvg(outputPanels, metadata.width, metadata.height);
-        const annotatedPath = path.join(dir, `${name}_annotated.png`);
+        const annotatedPath = path.join(dir, `${name}.png`);
 
         await sharp(imageBuffer)
             .composite([{ input: overlaySvg, top: 0, left: 0 }])
             .toFile(annotatedPath);
 
-        console.log(`  Saved annotated: ${annotatedPath}`);
 
         if (deleteOriginal) {
             fs.unlinkSync(fullPath);
-            console.log(`  Deleted original: ${fullPath}`);
         }
 
         return { panels: outputPanels.length, success: true };
@@ -529,70 +477,3 @@ async function detectAndExtractPanels(imagePath: string, deleteOriginal: boolean
         return { panels: 0, success: false };
     }
 }
-
-// ============ Batch Processing ============
-
-async function processDirectory(dirPath: string, deleteOriginals: boolean = false): Promise<void> {
-    const supportedExts = ['.jpg', '.jpeg', '.png', '.webp', '.tiff', '.gif'];
-    const files = fs.readdirSync(dirPath).filter((f) => {
-        const ext = path.extname(f).toLowerCase();
-        return supportedExts.includes(ext) && !f.includes('_annotated');
-    });
-
-    console.log(`Found ${files.length} images in ${dirPath}\n`);
-
-    let totalPanels = 0;
-    let successCount = 0;
-
-    for (const file of files) {
-        const result = await detectAndExtractPanels(path.join(dirPath, file), deleteOriginals);
-        if (result.success) {
-            successCount++;
-            totalPanels += result.panels;
-        }
-        console.log('');
-    }
-
-    console.log(`\nComplete: ${successCount}/${files.length} images processed, ${totalPanels} total panels extracted`);
-}
-
-// ============ CLI ============
-
-async function main() {
-    const args = process.argv.slice(2);
-
-    if (args.length < 1) {
-        console.log(`
-Comic Panel Segmenter
-
-Usage:
-  npx ts-node comic-segmenter.ts <image-or-directory> [--delete-original]
-
-Examples:
-  npx ts-node comic-segmenter.ts comic.jpg
-  npx ts-node comic-segmenter.ts ./comics/
-  npx ts-node comic-segmenter.ts comic.jpg --delete-original
-
-Output:
-  For input "comic.jpg":
-    - comic_annotated.png     (annotated full image)
-    - comic/1.jpg             (panel 1)
-    - comic/2.jpg             (panel 2)
-    - ...
-`);
-        process.exit(1);
-    }
-
-    const inputPath = args[0];
-    const deleteOriginal = args.includes('--delete-original');
-
-    const stat = fs.statSync(inputPath);
-
-    if (stat.isDirectory()) {
-        await processDirectory(inputPath, deleteOriginal);
-    } else {
-        await detectAndExtractPanels(inputPath, deleteOriginal);
-    }
-}
-
-main().catch(console.error);

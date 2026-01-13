@@ -163,3 +163,103 @@ export async function MergeAudioToVideo(
         }
     });
 }
+
+/**
+ * Creates a video slideshow from an array of images.
+ * Each image is displayed for the specified duration.
+ * 
+ * @param imagePaths - Array of paths to the images in order
+ * @param videoPath - Output path for the generated video
+ * @param durationPerImage - Duration in seconds for each image
+ * @param options - Optional settings for fps, width, and height
+ */
+export async function CreateSlideshow(
+    imagePaths: string[],
+    videoPath: string,
+    durationPerImage: number,
+    options: {
+        fps?: number;
+        width?: number;
+        height?: number;
+    } = {}
+): Promise<void> {
+    if (imagePaths.length === 0) {
+        throw new Error("imagePaths array cannot be empty");
+    }
+
+    if (durationPerImage <= 0) {
+        throw new Error("durationPerImage must be greater than 0");
+    }
+
+    // Convert to VideoData format expected by CreateVideoFromImages
+    const videoData: VideoData[] = imagePaths.map((imagePath) => ({
+        panel: imagePath,
+        duration: durationPerImage,
+    }));
+
+    return CreateVideoFromImages(videoData, videoPath, options);
+}
+
+/**
+ * Merges multiple video files into a single video.
+ * Videos are concatenated in the order they appear in the array.
+ * 
+ * @param videoPaths - Array of paths to the video files to merge
+ * @param outputPath - Output path for the merged video
+ */
+export async function MergeVideos(
+    videoPaths: string[],
+    outputPath: string
+): Promise<void> {
+    if (videoPaths.length === 0) {
+        throw new Error("videoPaths array cannot be empty");
+    }
+
+    if (videoPaths.length === 1) {
+        // Just copy the single video to the output path
+        await fs.promises.copyFile(videoPaths[0]!, outputPath);
+        return;
+    }
+
+    // Create a temporary file list for FFmpeg concat demuxer
+    const tempListPath = path.join(path.dirname(outputPath), `concat_list_${Date.now()}.txt`);
+    const fileListContent = videoPaths
+        .map((videoPath) => `file '${videoPath.replace(/'/g, "'\\''")}'`)
+        .join("\n");
+
+    await fs.promises.writeFile(tempListPath, fileListContent);
+
+    return new Promise((resolve, reject) => {
+        ffmpeg()
+            .input(tempListPath)
+            .inputOptions(["-f concat", "-safe 0"])
+            .outputOptions(["-c copy"])
+            .output(outputPath)
+            .on("start", (cmd) => {
+                console.log("FFmpeg merge command:", cmd);
+            })
+            .on("progress", (progress) => {
+                console.log(`Merging videos: ${progress.percent?.toFixed(1)}% done`);
+            })
+            .on("end", async () => {
+                // Clean up the temporary file list
+                try {
+                    await fs.promises.unlink(tempListPath);
+                } catch (e) {
+                    console.warn("Failed to delete temp file:", tempListPath);
+                }
+                console.log("Videos merged successfully:", outputPath);
+                resolve();
+            })
+            .on("error", async (err) => {
+                // Clean up the temporary file list on error too
+                try {
+                    await fs.promises.unlink(tempListPath);
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+                reject(new Error(`FFmpeg merge error: ${err.message}`));
+            })
+            .run();
+    });
+}

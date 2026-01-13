@@ -260,7 +260,9 @@ export default class GeminiAI implements AIRepository {
                     config: { mimeType: file.mimeType },
                 });
                 if (!uploadedFile.uri || !uploadedFile.mimeType) {
-                    throw new Error("failed to upload file")
+                    // throw new Error("failed to upload file")
+                    console.log(`failed to upload file: ${file.path}`)
+                    continue
                 }
                 uploadedFiles.push({ uri: uploadedFile.uri, mimeType: uploadedFile.mimeType });
             }
