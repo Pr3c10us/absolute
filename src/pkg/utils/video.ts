@@ -2,9 +2,86 @@ import ffmpeg from "fluent-ffmpeg";
 import * as fs from "fs";
 import * as path from "path";
 
-interface VideoData {
+export type Effect =
+    | "zoomIn"
+    | "zoomOut"
+    | "panLeft"
+    | "panRight"
+    | "panUp"
+    | "panDown";
+
+export const OppositeEffect: Record<Effect, Effect> = {
+    zoomIn: "zoomOut",
+    zoomOut: "zoomIn",
+    panLeft: "panRight",
+    panRight: "panLeft",
+    panUp: "panDown",
+    panDown: "panUp",
+};
+
+export interface VideoData {
     panel: string;
     duration: number;
+    effect?: Effect;
+}
+
+/**
+ * Helper to generate the specific zoompan filter string.
+ * This now operates on a generic coordinate system (iw/ih),
+ * so it automatically benefits from the Higher Resolution Input.
+ */
+function getEffectFilter(
+    effect: Effect | undefined,
+    duration: number,
+    fps: number
+): string {
+    const totalFrames = Math.ceil(duration * fps);
+
+    // Normalized time: 0.0 to 1.0
+    const p = `on/${totalFrames}`;
+    const invP = `(1-on/${totalFrames})`;
+
+    // Constants
+    const Z_PAN = "1.5";
+    const Z_MIN = "1.0";
+
+    // Center: (Input - Viewport) / 2
+    const center_x = (z: string) => `(iw-iw/(${z}))/2`;
+    const center_y = (z: string) => `(ih-ih/(${z}))/2`;
+
+    // Max Offset: (Input - Viewport)
+    const max_x = (z: string) => `(iw-iw/(${z}))`;
+    const max_y = (z: string) => `(ih-ih/(${z}))`;
+
+    // ZOOM EXPRESSIONS
+    // We construct the Zoom Curve strings here to keep the switch clean
+    const zIn = `${Z_MIN}+(${Z_PAN}-${Z_MIN})*${p}`;
+    const zOut = `${Z_PAN}-(${Z_PAN}-${Z_MIN})*${p}`;
+
+    switch (effect) {
+        // --- ZOOM EFFECTS ---
+        case "zoomIn":
+            return `z='${zIn}':x='${center_x(zIn)}':y='${center_y(zIn)}'`;
+
+        case "zoomOut":
+            return `z='${zOut}':x='${center_x(zOut)}':y='${center_y(zOut)}'`;
+
+        // --- PAN EFFECTS ---
+        case "panLeft":
+            return `z='${Z_PAN}':x='${max_x(Z_PAN)}*${invP}':y='${center_y(Z_PAN)}'`;
+
+        case "panRight":
+            return `z='${Z_PAN}':x='${max_x(Z_PAN)}*${p}':y='${center_y(Z_PAN)}'`;
+
+        case "panUp":
+            return `z='${Z_PAN}':x='${center_x(Z_PAN)}':y='${max_y(Z_PAN)}*${invP}'`;
+
+        case "panDown":
+            return `z='${Z_PAN}':x='${center_x(Z_PAN)}':y='${max_y(Z_PAN)}*${p}'`;
+
+        default:
+            return `z='1':x='0':y='0'`;
+    }
 }
 
 export async function CreateVideoFromImages(
@@ -14,9 +91,10 @@ export async function CreateVideoFromImages(
         fps?: number;
         width?: number;
         height?: number;
+        backgroundImage?: string;
     } = {}
 ): Promise<void> {
-    const { fps = 30, width = 1920, height = 1080 } = options;
+    const {fps = 30, width = 1920, height = 1080, backgroundImage} = options;
 
     if (videoData.length === 0) {
         throw new Error("videoData array cannot be empty");
@@ -25,26 +103,77 @@ export async function CreateVideoFromImages(
     return new Promise((resolve, reject) => {
         let command = ffmpeg();
 
-        // Add each image as a separate input with loop and duration
-        videoData.forEach(({ panel, duration }) => {
-            command = command
-                .input(panel)
-                .inputOptions(["-loop 1", `-t ${duration}`]);
+        // 1. Input Handling
+        if (backgroundImage) {
+            command = command.input(backgroundImage).inputOptions(["-loop 1"]);
+        }
+
+        videoData.forEach(({panel}) => {
+            command = command.input(panel);
         });
 
-        // Build the filter_complex string
-        // Scale each input, then concat them all
-        const scaleFilters = videoData
-            .map((_, i) =>
-                `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-                `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v${i}]`
-            )
-            .join("; ");
+        // 2. Filter Construction
+        let filterChains: string[] = [];
 
+        // We use a specific Magenta color for padding, then key it out.
+        const PAD_COLOR = "0xFF00FF";
+
+        // SUPER-SAMPLING FACTOR
+        // 3x Resolution (e.g. 5760x3240) provides enough granularity
+        // for sub-pixel movement without crashing memory like 4k/8k might.
+        const SS = 3;
+        const ssW = width * SS;
+        const ssH = height * SS;
+
+        // Background Processing (remains at standard resolution)
+        if (backgroundImage) {
+            const bgBase = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1`;
+            const splitOuts = videoData.map((_, i) => `[bg_copy${i}]`).join("");
+            filterChains.push(`${bgBase},split=${videoData.length}${splitOuts}`);
+        }
+
+        videoData.forEach((data, i) => {
+            const idx = backgroundImage ? i + 1 : i;
+            const normalizedLabel = `norm${i}`;
+            const effectLabel = `effect${i}`;
+            const keyedLabel = `keyed${i}`;
+            const finalLabel = `v${i}`;
+
+            // --- A. UPSCALE & PAD (Input Supersampling) ---
+            // We scale the Input Image UP to the massive SS resolution.
+            // This creates a fine-grained grid for zoompan to move across.
+            const upscaleFilter = `[${idx}:v]scale=${ssW}:${ssH}:force_original_aspect_ratio=decrease,` +
+                `pad=${ssW}:${ssH}:(ow-iw)/2:(oh-ih)/2:color=${PAD_COLOR},setsar=1[${normalizedLabel}]`;
+            filterChains.push(upscaleFilter);
+
+            // --- B. EFFECT (At High Resolution) ---
+            const effectParams = getEffectFilter(data.effect, data.duration, fps);
+
+            // zoompan outputs at High Res (s=ssW x ssH)
+            // We do NOT scale down yet.
+            const highResZoomCmd = `zoompan=${effectParams}:d=${Math.ceil(data.duration * fps)}:s=${ssW}x${ssH}:fps=${fps}[${effectLabel}]`;
+            filterChains.push(`[${normalizedLabel}]${highResZoomCmd}`);
+
+            // --- C. KEYING & DOWNSCALING ---
+            // 1. Remove Magenta (Key) AT HIGH RES. This ensures sharp alpha edges.
+            // 2. Scale Down to 1080p using 'lanczos' (best for downscaling).
+            const finalizeFilters = `[${effectLabel}]colorkey=${PAD_COLOR}:0.3:0.1,` +
+                `scale=${width}:${height}:flags=lanczos[${keyedLabel}]`;
+            filterChains.push(finalizeFilters);
+
+            // --- D. COMPOSITION ---
+            if (backgroundImage) {
+                filterChains.push(`[bg_copy${i}][${keyedLabel}]overlay=(W-w)/2:(H-h)/2:shortest=1[${finalLabel}]`);
+            } else {
+                filterChains.push(`[${keyedLabel}]format=yuv420p[${finalLabel}]`);
+            }
+        });
+
+        // 3. Concatenation
         const concatInputs = videoData.map((_, i) => `[v${i}]`).join("");
-        const concatFilter = `${concatInputs}concat=n=${videoData.length}:v=1:a=0[outv]`;
+        filterChains.push(`${concatInputs}concat=n=${videoData.length}:v=1:a=0[outv]`);
 
-        const filterComplex = `${scaleFilters}; ${concatFilter}`;
+        const filterComplex = filterChains.join("; ");
 
         command
             .complexFilter(filterComplex)
@@ -55,24 +184,21 @@ export async function CreateVideoFromImages(
                 "-c:v libx264",
                 "-preset medium",
                 "-crf 23",
+                "-movflags +faststart"
             ])
             .output(outputPath)
-            .on("start", (cmd) => {
-                console.log("FFmpeg command:", cmd);
-            })
-            .on("progress", (progress) => {
-                console.log(`Processing: ${progress.percent?.toFixed(1)}% done`);
-            })
+            .on("start", (cmd) => console.log("FFmpeg command:", cmd))
+            .on("progress", (progress) => console.log(`Processing: ${progress.percent?.toFixed(1)}% done`))
             .on("end", () => {
                 console.log("Video created successfully:", outputPath);
                 resolve();
             })
-            .on("error", (err) => {
-                reject(new Error(`FFmpeg error: ${err.message}`));
-            })
+            .on("error", (err) => reject(new Error(`FFmpeg error: ${err.message}`)))
             .run();
     });
 }
+
+// ... (Rest of file: MergeAudioToVideo, CreateSlideshow, MergeVideos remain unchanged)
 export async function MergeAudioToVideo(
     videoPath: string,
     audioPath: string,
@@ -83,7 +209,7 @@ export async function MergeAudioToVideo(
         volume?: number;
     } = {}
 ): Promise<void> {
-    const { audioFade = true, loop = false, volume = 1.0 } = options;
+    const {audioFade = true, loop = false, volume = 1.0} = options;
 
     return new Promise((resolve, reject) => {
         let cmd = ffmpeg().input(videoPath).input(audioPath);
@@ -105,7 +231,6 @@ export async function MergeAudioToVideo(
         }
 
         if (audioFade) {
-            // Get video duration to apply fade out at the end
             ffmpeg.ffprobe(videoPath, (err, metadata) => {
                 if (err) {
                     reject(new Error(`FFprobe error: ${err.message}`));
@@ -123,19 +248,13 @@ export async function MergeAudioToVideo(
                 cmd
                     .outputOptions(outputOptions)
                     .output(outputPath)
-                    .on("start", (cmdLine) => {
-                        console.log("FFmpeg command:", cmdLine);
-                    })
-                    .on("progress", (progress) => {
-                        console.log(`Merging: ${progress.percent?.toFixed(1)}% done`);
-                    })
+                    .on("start", (cmdLine) => console.log("FFmpeg command:", cmdLine))
+                    .on("progress", (progress) => console.log(`Merging: ${progress.percent?.toFixed(1)}% done`))
                     .on("end", () => {
                         console.log("Audio merged successfully:", outputPath);
                         resolve();
                     })
-                    .on("error", (e) => {
-                        reject(new Error(`FFmpeg error: ${e.message}`));
-                    })
+                    .on("error", (e) => reject(new Error(`FFmpeg error: ${e.message}`)))
                     .run();
             });
         } else {
@@ -146,33 +265,18 @@ export async function MergeAudioToVideo(
             cmd
                 .outputOptions(outputOptions)
                 .output(outputPath)
-                .on("start", (cmdLine) => {
-                    console.log("FFmpeg command:", cmdLine);
-                })
-                .on("progress", (progress) => {
-                    console.log(`Merging: ${progress.percent?.toFixed(1)}% done`);
-                })
+                .on("start", (cmdLine) => console.log("FFmpeg command:", cmdLine))
+                .on("progress", (progress) => console.log(`Merging: ${progress.percent?.toFixed(1)}% done`))
                 .on("end", () => {
                     console.log("Audio merged successfully:", outputPath);
                     resolve();
                 })
-                .on("error", (e) => {
-                    reject(new Error(`FFmpeg error: ${e.message}`));
-                })
+                .on("error", (e) => reject(new Error(`FFmpeg error: ${e.message}`)))
                 .run();
         }
     });
 }
 
-/**
- * Creates a video slideshow from an array of images.
- * Each image is displayed for the specified duration.
- * 
- * @param imagePaths - Array of paths to the images in order
- * @param videoPath - Output path for the generated video
- * @param durationPerImage - Duration in seconds for each image
- * @param options - Optional settings for fps, width, and height
- */
 export async function CreateSlideshow(
     imagePaths: string[],
     videoPath: string,
@@ -187,26 +291,16 @@ export async function CreateSlideshow(
         throw new Error("imagePaths array cannot be empty");
     }
 
-    if (durationPerImage <= 0) {
-        throw new Error("durationPerImage must be greater than 0");
-    }
-
-    // Convert to VideoData format expected by CreateVideoFromImages
+    // Convert to VideoData format
     const videoData: VideoData[] = imagePaths.map((imagePath) => ({
         panel: imagePath,
         duration: durationPerImage,
+        effect: "zoomIn", // Default effect
     }));
 
     return CreateVideoFromImages(videoData, videoPath, options);
 }
 
-/**
- * Merges multiple video files into a single video.
- * Videos are concatenated in the order they appear in the array.
- * 
- * @param videoPaths - Array of paths to the video files to merge
- * @param outputPath - Output path for the merged video
- */
 export async function MergeVideos(
     videoPaths: string[],
     outputPath: string
@@ -216,12 +310,10 @@ export async function MergeVideos(
     }
 
     if (videoPaths.length === 1) {
-        // Just copy the single video to the output path
         await fs.promises.copyFile(videoPaths[0]!, outputPath);
         return;
     }
 
-    // Create a temporary file list for FFmpeg concat demuxer
     const tempListPath = path.join(path.dirname(outputPath), `concat_list_${Date.now()}.txt`);
     const fileListContent = videoPaths
         .map((videoPath) => `file '${videoPath.replace(/'/g, "'\\''")}'`)
@@ -235,28 +327,20 @@ export async function MergeVideos(
             .inputOptions(["-f concat", "-safe 0"])
             .outputOptions(["-c copy"])
             .output(outputPath)
-            .on("start", (cmd) => {
-                console.log("FFmpeg merge command:", cmd);
-            })
-            .on("progress", (progress) => {
-                console.log(`Merging videos: ${progress.percent?.toFixed(1)}% done`);
-            })
+            .on("start", (cmd) => console.log("FFmpeg merge command:", cmd))
+            .on("progress", (progress) => console.log(`Merging videos: ${progress.percent?.toFixed(1)}% done`))
             .on("end", async () => {
-                // Clean up the temporary file list
                 try {
                     await fs.promises.unlink(tempListPath);
                 } catch (e) {
-                    console.warn("Failed to delete temp file:", tempListPath);
                 }
                 console.log("Videos merged successfully:", outputPath);
                 resolve();
             })
             .on("error", async (err) => {
-                // Clean up the temporary file list on error too
                 try {
                     await fs.promises.unlink(tempListPath);
                 } catch (e) {
-                    // Ignore cleanup errors
                 }
                 reject(new Error(`FFmpeg merge error: ${err.message}`));
             })

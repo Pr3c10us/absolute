@@ -1,4 +1,4 @@
-import type { AIResponse, Voice, File } from "../../domains/ai";
+import type {AIResponse, Voice, File, UploadedFile} from "../../domains/ai";
 import type AIRepository from "../../domains/ai/repo";
 import {
     type GoogleGenAI,
@@ -9,6 +9,7 @@ import {
     Modality,
 } from "@google/genai";
 import type AppSecrets from "../../../pkg/secret";
+import {WithRetry} from "../../../pkg/utils/retry";
 
 type ModelPricing = {
     textInputPerMillion: number;
@@ -82,16 +83,37 @@ export default class GeminiAI implements AIRepository {
     constructor(private readonly ai: GoogleGenAI, private readonly appSecrets: AppSecrets) {
     }
 
+    async uploadFiles(files: File[]): Promise<UploadedFile[]> {
+        if (files && files.length > 0) {
+            const promises = files.map((file) =>
+                WithRetry(() => this.uploadFile(file))
+            );
+            return await Promise.all(promises);
+        }
+        return [];
+    }
+
+    private async uploadFile(file: File): Promise<UploadedFile> {
+        const uploadedFile = await this.ai.files.upload({
+            file: file.path,
+            config: {mimeType: file.mimeType},
+        });
+        if (!uploadedFile.uri || !uploadedFile.mimeType) {
+            throw new Error()
+        }
+        return {uri: uploadedFile.uri, mimeType: uploadedFile.mimeType};
+    }
+
     async generateAudio(text: string, voice?: Voice): Promise<AIResponse> {
         const model = this.appSecrets.geminiConfiguration.audioModel;
         const response = await this.ai.models.generateContent({
             model,
-            contents: [{ parts: [{ text }] }],
+            contents: [{parts: [{text}]}],
             config: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
                     voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: voice || "Algieba" },
+                        prebuiltVoiceConfig: {voiceName: voice || "Algieba"},
                     },
                 },
             },
@@ -102,7 +124,7 @@ export default class GeminiAI implements AIRepository {
 
         const dollars = this.calculateCost(model, response, "audio");
 
-        return { response: data, dollars };
+        return {response: data, dollars};
     }
 
     async generateAudioLive(text: string, voice?: Voice, maxRetries: number = 3): Promise<AIResponse> {
@@ -112,34 +134,15 @@ export default class GeminiAI implements AIRepository {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
                 voiceConfig: {
-                    prebuiltVoiceConfig: { voiceName: voice || "Algieba" },
+                    prebuiltVoiceConfig: {voiceName: voice || "Algieba"},
                 },
             },
         };
 
-        let lastError: Error = new Error("Failed to generate audio via Live API");
 
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-            try {
-                const result = await this.attemptLiveAudioGeneration(text, model, config);
-                return result;
-            } catch (error) {
-                lastError = error instanceof Error ? error : new Error(String(error));
-                console.error(`Live API attempt ${attempt + 1}/${maxRetries} failed:`, lastError.message);
+        const result = await WithRetry(() => this.attemptLiveAudioGeneration(text, model, config));
+        return result;
 
-                const isLastAttempt = attempt === maxRetries - 1;
-                if (isLastAttempt) {
-                    throw lastError;
-                }
-
-                // Exponential backoff: 1s, 2s, 4s...
-                const delay = 1000 * Math.pow(2, attempt);
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-
-        throw lastError;
     }
 
     private attemptLiveAudioGeneration(
@@ -159,7 +162,6 @@ export default class GeminiAI implements AIRepository {
                 config,
                 callbacks: {
                     onopen: () => {
-                        console.log("Live API connection opened");
                     },
                     onmessage: (message: any) => {
                         // Handle audio data from model response
@@ -208,7 +210,7 @@ export default class GeminiAI implements AIRepository {
                                 dollars = inputCost + outputCost;
                             }
 
-                            resolve({ response: combinedBase64, dollars });
+                            resolve({response: combinedBase64, dollars});
                         }
                     },
                     onerror: (error: any) => {
@@ -223,9 +225,7 @@ export default class GeminiAI implements AIRepository {
                     },
                     onclose: (event: any) => {
                         const reason = event?.reason;
-                        console.log("Live API connection closed:", reason || "(no reason)");
 
-                        // If connection closed with an error reason and we haven't resolved yet, reject
                         if (reason && !isResolved) {
                             isResolved = true;
                             reject(new Error(`Live API connection closed: ${reason}`));
@@ -236,7 +236,7 @@ export default class GeminiAI implements AIRepository {
                 liveSession = session;
                 // Send the text as client content and mark turn as complete
                 session.sendClientContent({
-                    turns: [{ parts: [{ text }] }],
+                    turns: [{parts: [{text}]}],
                     turnComplete: true,
                 });
             }).catch((error) => {
@@ -251,25 +251,9 @@ export default class GeminiAI implements AIRepository {
         });
     }
 
-    async generateText(prompt: string, files?: File[]): Promise<AIResponse> {
-        let uploadedFiles: { uri: string, mimeType: string }[] = []
-        if (files && files.length > 0) {
-            for await (const file of files) {
-                const uploadedFile = await this.ai.files.upload({
-                    file: file.path,
-                    config: { mimeType: file.mimeType },
-                });
-                if (!uploadedFile.uri || !uploadedFile.mimeType) {
-                    // throw new Error("failed to upload file")
-                    console.log(`failed to upload file: ${file.path}`)
-                    continue
-                }
-                uploadedFiles.push({ uri: uploadedFile.uri, mimeType: uploadedFile.mimeType });
-            }
-        }
-
+    async generateText(prompt: string, useFastModel: boolean, uploadedFiles?: UploadedFile[]): Promise<AIResponse> {
         let parts: PartUnion[] = []
-        if (uploadedFiles.length > 0) {
+        if (uploadedFiles && uploadedFiles.length > 0) {
             for await (const uploadedFile of uploadedFiles) {
                 const isActive = await this.waitForFileActive(uploadedFile.uri);
                 if (!isActive) {
@@ -281,7 +265,7 @@ export default class GeminiAI implements AIRepository {
 
         parts.push(prompt)
 
-        const model = this.appSecrets.geminiConfiguration.model;
+        const model = useFastModel ? this.appSecrets.geminiConfiguration.fastModel : this.appSecrets.geminiConfiguration.model;
         const response = await this.ai.models.generateContent({
             model,
             contents: createUserContent(parts),
@@ -291,7 +275,7 @@ export default class GeminiAI implements AIRepository {
 
         const dollars = this.calculateCost(model, response, "text");
 
-        return { response: response.text, dollars };
+        return {response: response.text, dollars};
     }
 
     private async waitForFileActive(fileUri: string, maxWaitTime: number = 30000): Promise<boolean> {
@@ -322,7 +306,7 @@ export default class GeminiAI implements AIRepository {
         if (!file.state) {
             throw new Error("failed to analyse content")
         }
-        return { state: file.state }
+        return {state: file.state}
     };
 
     private calculateCost(
@@ -344,8 +328,6 @@ export default class GeminiAI implements AIRepository {
 
         const inputTokens = usageMetadata.promptTokenCount ?? 0;
         const outputTokens = usageMetadata.candidatesTokenCount ?? 0;
-
-        console.log({ inputTokens, outputTokens })
 
         const inputCostPerMillion = pricing.textInputPerMillion;
         const inputCost = (inputTokens / 1_000_000) * inputCostPerMillion;

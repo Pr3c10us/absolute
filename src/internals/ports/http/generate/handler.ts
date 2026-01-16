@@ -51,7 +51,7 @@ export default class GenerateHandler {
                 for (const file of req.files as Express.Multer.File[]) {
                     files.push({path: file.path, mimeType: file.mimetype})
                 }
-                let events = this.generateService.commands.generate.handle(files, req.body.voiceStyleInstruction, abortController)
+                let events = this.generateService.commands.generate.handle(files, req.body.voice,req.body.voiceStyleInstruction,req.body.context, abortController)
                 for await (const {event, data} of events) {
                     res.write(`event: ${event}\n`);
                     res.write(`data: ${JSON.stringify(data)}\n\n`);

@@ -14,6 +14,7 @@ import {WebSocketServer} from "ws";
 import type Adapters from "../../adapters";
 import rateLimit from "express-rate-limit";
 import GenerateHandler from "./generate/handler.ts";
+import path from "path";
 
 export default class ExpressHTTP {
     appSecrets: AppSecrets
@@ -37,7 +38,9 @@ export default class ExpressHTTP {
         this.server.set('trust proxy', 1)
         this.server.use(express.json());
         this.server.use(express.urlencoded({extended: true}));
-        this.server.use(helmet())
+        this.server.use(helmet({
+            contentSecurityPolicy: false
+        }));
         this.server.use(rateLimit({
             windowMs: 60 * 1000,
             max: 100,
@@ -60,10 +63,19 @@ export default class ExpressHTTP {
         this.server.use(cors(corsOptions));
         let morganMiddleware = new MorganMiddleware()
         this.server.use(morganMiddleware.middleware)
+        this.server.use('/results', express.static(
+            path.join(__dirname, "..","..","..",'results'),
+            // {
+            //     setHeaders: (res) => {
+            //         res.set('Content-Type', 'video/mp4');
+            //     }
+            // }
+        ));
 
         // Passport
         this.server.use(passport.initialize());
 
+        this.ui()
         this.health()
         this.generate()
 
@@ -75,12 +87,19 @@ export default class ExpressHTTP {
 
     listen() {
         this.bareServer.listen(this.appSecrets.port, () => {
-            console.log(`Listening on port http://localhost:${this.appSecrets.port}...`);
+            console.log(`Application started: http://localhost:${this.appSecrets.port}`);
+        })
+    }
+
+    ui() {
+        this.server.get('/', async (req, res) => {
+            return res.sendFile(__dirname + '/views/page.html');
         })
     }
 
     health() {
         this.server.get('/health', async (req, res) => {
+            console.log(path.join(__dirname, "..","..","..",'results'),)
             return res.status(StatusCodes.OK).send("server up")
         })
     }

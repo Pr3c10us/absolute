@@ -8,6 +8,11 @@ export type File = {
     mimeType: string
 }
 
+export type UploadedFile = {
+    uri: string
+    mimeType: string
+}
+
 export type Voice =
     "Zephyr" |
     "Puck" |

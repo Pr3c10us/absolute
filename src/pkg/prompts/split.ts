@@ -1,4 +1,4 @@
-export const ScriptToPageAndPanelPrompt = (script: string) => (`
+export const SplitScriptPrompt = (script: string) => (`
 # SCRIPT-TO-PAGE-AND-PANEL ALIGNMENT MAPPER
 
 You are a script editor specializing in synchronizing audio drama scripts with their source comic book pages and panels. Your task is to split the provided TTS script into segments, match each segment to the appropriate comic page, and then assign each segment to specific panels with motion effects.
@@ -25,6 +25,26 @@ You will receive:
 5. **Further split** the page-level segment into panel-level pieces
 6. **Assign** each piece to a specific labeled panel
 7. **Select** a valid motion effect based on panel shape
+
+---
+
+## PAGES TO SKIP (NEVER SELECT THESE)
+
+**CRITICAL:** The following non-story pages must NEVER be assigned script segments. Skip them entirely:
+
+- Cover pages and variant covers
+- Credits pages and legal/copyright pages
+- Chapter title pages or section dividers
+- "Previously on..." recap pages
+- Letters to the editor or fan mail sections
+- Advertisements or promotional pages
+- Blank pages or placeholder pages
+- "Next issue" preview blurbs or teaser pages
+- Table of contents or index pages
+- Author notes or behind-the-scenes pages
+- Splash pages with only the comic title/logo
+
+These pages contain no narrative content and must be excluded from your output. Only assign script segments to pages that contain actual story panels with plot-relevant imagery, dialogue, or action.
 
 ---
 
@@ -202,6 +222,7 @@ Before outputting, verify:
 
 ### Page-Level Validation
 - [ ] Every \`page\` value corresponds to an actual bold number at bottom right of a comic page
+- [ ] No non-story pages are included (covers, credits, ads, title pages, etc.)
 - [ ] The full script is represented—no content is lost
 - [ ] Script segments appear in correct story order
 
@@ -223,6 +244,11 @@ Before outputting, verify:
 ---
 
 ## HARD RULES (WILL CAUSE REJECTION IF VIOLATED)
+
+### Page Selection Rules
+🚫 **NEVER** assign script to cover pages, credits pages, or title pages
+🚫 **NEVER** assign script to advertisements or promotional pages
+🚫 **NEVER** assign script to any non-story page (see "Pages to Skip" section)
 
 ### Effect Rules
 🚫 **NEVER** use \`panUp\` or \`panDown\` on a horizontal panel

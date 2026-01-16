@@ -1,6 +1,13 @@
-import type { AIResponse, Voice, File } from "."
+import type {AIResponse, Voice, File, UploadedFile} from "."
 
 export default interface AIRepository {
+    /**
+     * Upload File to AI people for preprocessing.
+     * @param files A list of files to use for the text generation.
+     * @returns A Promise that resolves to the uploaded files.
+     */
+    uploadFiles(files: File[]): Promise<UploadedFile[]>
+
     /**
      * Generates audio from text using the AI service.
      * @param text The text to generate audio from.
@@ -12,10 +19,11 @@ export default interface AIRepository {
     /**
      * Generates text from text using the AI service.
      * @param prompt The text to generate text from.
-     * @param files A list of files to use for the text generation.
+     * @param useFastModel The faster model should be used.
+     * @param uploadedFiles A list of files to use for the text generation.
      * @returns A Promise that resolves to the generated text.
      */
-    generateText(prompt: string, files?: File[]): Promise<AIResponse>
+    generateText(prompt: string,useFastModel: boolean, uploadedFiles?: UploadedFile[], ): Promise<AIResponse>
 
     /**
      * Generates audio using the Live API as a workaround for rate limits on normal audio models.

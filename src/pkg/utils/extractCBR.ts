@@ -1,12 +1,12 @@
-import { createExtractorFromFile } from 'node-unrar-js';
+import {createExtractorFromFile} from 'node-unrar-js';
 import AdmZip from 'adm-zip';
 import Seven from 'node-7z';
 import sevenBin from '7zip-bin';
 import * as tar from 'tar';
-import sharp, { type Metadata, type Sharp } from 'sharp';
+import sharp, {type Metadata, type Sharp} from 'sharp';
 import fs from 'fs';
 import path from 'path';
-import { DetectAndExtractPanels } from "./segments.ts";
+import {DetectAndExtractPanels} from "./segments.ts";
 
 interface Panel {
     minX: number;
@@ -80,30 +80,25 @@ function generateOverlaySvg(panels: OutputPanel[], imageWidth: number, imageHeig
     return Buffer.from(svgContent);
 }
 
-/**
- * Adds a bold page number to an image with contrasting colors.
- * Saves the numbered image to a separate output directory, preserving original.
- * Detects background brightness and uses white text on dark backgrounds, black text on light backgrounds.
- */
-async function addPageNumberToImage(imagePath: string, pageNumber: number, outputDir: string): Promise<void> {
+async function addPageNumberToOverlay(imagePath: string, pageNumber: number): Promise<void> {
     const imageBuffer = fs.readFileSync(imagePath);
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
-    const ext = path.extname(imagePath);
-    const baseName = path.basename(imagePath);
 
     if (!metadata.width || !metadata.height) {
         throw new Error('Could not read image dimensions');
     }
 
-    // Sample the top-left corner to determine background brightness
+    // Sample the bottom-right corner to determine background brightness (where the number will go)
     const sampleSize = Math.min(100, Math.floor(Math.min(metadata.width, metadata.height) / 4));
-    const { data: sampleData } = await image
+    const sampleX = Math.max(0, metadata.width - sampleSize - 10);
+    const sampleY = Math.max(0, metadata.height - sampleSize - 10);
+    const {data: sampleData} = await image
         .clone()
-        .extract({ left: 10, top: 10, width: sampleSize, height: sampleSize })
+        .extract({left: sampleX, top: sampleY, width: sampleSize, height: sampleSize})
         .grayscale()
         .raw()
-        .toBuffer({ resolveWithObject: true });
+        .toBuffer({resolveWithObject: true});
 
     // Calculate average brightness (0-255)
     let totalBrightness = 0;
@@ -125,8 +120,8 @@ async function addPageNumberToImage(imagePath: string, pageNumber: number, outpu
     const labelHeight = fontSize * 1.1;
     const cornerOffset = Math.floor(fontSize * 0.3);
 
-    // Position at bottom-left
-    const labelX = cornerOffset;
+    // Position at bottom-right
+    const labelX = metadata.width - labelWidth - cornerOffset;
     const labelY = metadata.height - labelHeight - cornerOffset;
 
     // Create SVG overlay with bold page number
@@ -143,16 +138,17 @@ async function addPageNumberToImage(imagePath: string, pageNumber: number, outpu
 
     const overlaySvg = Buffer.from(svgContent);
 
-    // Create output directory if it doesn't exist
-    if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-    }
+    // Create a temp path for the new image
+    const tempPath = imagePath + '.tmp';
 
-    // Save numbered image to output directory
-    const outputPath = path.join(outputDir, baseName);
+    // Save numbered image to temp path, then replace original
     await sharp(imageBuffer)
-        .composite([{ input: overlaySvg, top: 0, left: 0 }])
-        .toFile(outputPath);
+        .composite([{input: overlaySvg, top: 0, left: 0}])
+        .toFile(tempPath);
+
+    // Replace original with temp
+    fs.unlinkSync(imagePath);
+    fs.renameSync(tempPath, imagePath);
 }
 
 async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = false): Promise<DetectResult> {
@@ -173,13 +169,13 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
         const processingWidth = 1000;
         const scale = metadata.width / processingWidth;
 
-        const { data: buffer, info } = await image
+        const {data: buffer, info} = await image
             .clone()
             .resize(processingWidth)
             .grayscale()
             .threshold(240)
             .raw()
-            .toBuffer({ resolveWithObject: true });
+            .toBuffer({resolveWithObject: true});
 
         const width = info.width;
         const height = info.height;
@@ -192,7 +188,7 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
             for (let x = 0; x < width; x++) {
                 const i = idx(x, y);
                 if (buffer[i] === 0 && visited[i] === 0) {
-                    const panel: Panel = { minX: x, maxX: x, minY: y, maxY: y, pixelCount: 0 };
+                    const panel: Panel = {minX: x, maxX: x, minY: y, maxY: y, pixelCount: 0};
                     const queue: number[] = [x, y];
                     visited[i] = 1;
 
@@ -239,7 +235,7 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
 
         const panelsDir = path.join(dir, name);
         if (!fs.existsSync(panelsDir)) {
-            fs.mkdirSync(panelsDir, { recursive: true });
+            fs.mkdirSync(panelsDir, {recursive: true});
         }
 
         let count = 1;
@@ -262,41 +258,24 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
         const enhancedPath = path.join(dir, `${name}.png`);
 
         await sharp(imageBuffer)
-            .composite([{ input: overlaySvg, top: 0, left: 0 }])
+            .composite([{input: overlaySvg, top: 0, left: 0}])
             .toFile(enhancedPath);
 
         if (deleteOriginal) {
             fs.unlinkSync(fullPath);
         }
 
-        return { panels: outputPanels.length, success: true };
+        return {panels: outputPanels.length, success: true};
     } catch (err) {
         const error = err as Error;
         console.error(`  Error: ${error.message}`);
-        return { panels: 0, success: false };
+        return {panels: 0, success: false};
     }
 }
 
-// Extract CBR (RAR archive)
-async function extractCBR(filePath: string, outputDir: string): Promise<number> {
-    const extractor = await createExtractorFromFile({
-        filepath: filePath,
-        targetPath: outputDir,
-    });
-
-    const { files } = extractor.extract();
-    let count = 0;
-    for (const file of files) {
-        if (!file.fileHeader.flags.directory) count++;
-    }
-    return count;
-}
-
-// Extract CBZ (ZIP archive)
-async function extractCBZ(filePath: string, outputDir: string): Promise<number> {
+async function extractCBZ(filePath: string, outputDir: string) {
     const zip = new AdmZip(filePath);
     const entries = zip.getEntries();
-    let count = 0;
 
     for (const entry of entries) {
         if (!entry.isDirectory) {
@@ -304,53 +283,22 @@ async function extractCBZ(filePath: string, outputDir: string): Promise<number> 
             const targetDir = path.dirname(targetPath);
 
             if (!fs.existsSync(targetDir)) {
-                fs.mkdirSync(targetDir, { recursive: true });
+                fs.mkdirSync(targetDir, {recursive: true});
             }
 
             fs.writeFileSync(targetPath, entry.getData());
-            count++;
         }
     }
-    return count;
 }
 
-// Extract CB7 (7-Zip archive)
-async function extractCB7(filePath: string, outputDir: string): Promise<number> {
+async function extractCB7(filePath: string, outputDir: string) {
     return new Promise((resolve, reject) => {
-        let count = 0;
         const stream = Seven.extractFull(filePath, outputDir, {
             $bin: sevenBin.path7za,
             recursive: true,
         });
-
-        stream.on('data', () => count++);
-        stream.on('end', () => resolve(count));
         stream.on('error', (err: any) => reject(err));
     });
-}
-
-// Extract CBT (TAR archive)
-async function extractCBT(filePath: string, outputDir: string): Promise<number> {
-    await tar.extract({
-        file: filePath,
-        cwd: outputDir,
-    });
-
-    // Count extracted files
-    let count = 0;
-    const countFiles = (dir: string) => {
-        const items = fs.readdirSync(dir);
-        for (const item of items) {
-            const itemPath = path.join(dir, item);
-            if (fs.statSync(itemPath).isDirectory()) {
-                countFiles(itemPath);
-            } else {
-                count++;
-            }
-        }
-    };
-    countFiles(outputDir);
-    return count;
 }
 
 async function* SliceComic(
@@ -375,38 +323,40 @@ async function* SliceComic(
         : path.join(path.dirname(fullPath), folderName);
 
     if (fs.existsSync(outputDir)) {
-        fs.rmSync(outputDir, { recursive: true, force: true });
+        fs.rmSync(outputDir, {recursive: true, force: true});
     }
-    fs.mkdirSync(outputDir, { recursive: true });
+    fs.mkdirSync(outputDir, {recursive: true});
 
     try {
-        let extractedCount: number;
+        yield {event: 'update', data: {message: `extracting images`}};
 
         switch (format) {
             case 'cbr':
-                extractedCount = await extractCBR(fullPath, outputDir);
+                await createExtractorFromFile({
+                    filepath: fullPath,
+                    targetPath: outputDir,
+                });
                 break;
             case 'cbz':
-                extractedCount = await extractCBZ(fullPath, outputDir);
+                await extractCBZ(fullPath, outputDir);
                 break;
             case 'cb7':
-                extractedCount = await extractCB7(fullPath, outputDir);
+                await extractCB7(fullPath, outputDir);
                 break;
             case 'cbt':
-                extractedCount = await extractCBT(fullPath, outputDir);
+                await tar.extract({
+                    file: fullPath,
+                    cwd: outputDir,
+                });
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
-
-        yield { event: 'update', data: { message: `extracted ${extractedCount} files.` } };
-
     } catch (error) {
         const err = error as Error;
         throw new Error(`Error extracting ${format.toUpperCase()} file: ${err.message}`);
     }
 
-    // Recursively find all image files
     const findImages = (dir: string): string[] => {
         const results: string[] = [];
         const items = fs.readdirSync(dir);
@@ -429,32 +379,37 @@ async function* SliceComic(
 
     const imageFiles = findImages(outputDir).sort();
 
-    // Create numbers folder for storing numbered images separately
-    const numbersDir = path.join(outputDir, 'numbers');
-    if (!fs.existsSync(numbersDir)) {
-        fs.mkdirSync(numbersDir, { recursive: true });
+    if (imageFiles.length > 0) {
+        yield {event: 'update', data: {message: 'creating video background'}};
+        const firstImagePath = imageFiles[0]!;
+        const coverBlurPath = path.join(outputDir, 'cover_blur.jpg');
+        await sharp(firstImagePath)
+            .blur(20)
+            .jpeg({quality: 80})
+            .toFile(coverBlurPath);
     }
 
-    // Add page numbers to each image and save to numbers folder (preserves originals)
-    for (let i = 0; i < imageFiles.length; i++) {
-        const imagePath = imageFiles[i]!;
-        await addPageNumberToImage(imagePath, i + 1, numbersDir);
-        yield { event: 'update', data: { message: `page number added to page ${i + 1} of ${imageFiles.length} pages` } };
-    }
-    yield { event: 'update', data: { message: 'all pages have been numbered.' } };
+    const extractPanelPromises = imageFiles.map((imagePath) =>
+        // DetectAndExtractPanels(imagePath, true)
+        detectAndCropPanels(imagePath, true)
+    );
+    yield {event: 'update', data: {message: `detecting and extracting panels from pages`}};
+    await Promise.all(extractPanelPromises);
 
-    for (let i = 0; i < imageFiles.length; i++) {
-        const imagePath = imageFiles[i]!;
-        const imageFile = path.basename(imagePath);
+    // Now add page numbers to the overlay images (the .png files created by panel detection)
+    // This is done AFTER detection to prevent numbers from being detected as panels
+    const overlayImages = imageFiles.map((imagePath) => {
+        const dir = path.dirname(imagePath);
+        const name = path.basename(imagePath, path.extname(imagePath));
+        return path.join(dir, `${name}.png`);
+    }).filter(overlayPath => fs.existsSync(overlayPath));
 
-
-        await DetectAndExtractPanels(imagePath, true);
-        // await detectAndCropPanels(imagePath, true);
-        yield { event: 'update', data: { message: `panels detected and cropped for page ${i + 1} of ${imageFiles.length} pages`, } };
-    }
-
-    yield { event: 'update', data: { message: 'all panels have been extracted.' } };
+    const numberingPromises = overlayImages.map((overlayPath, i) =>
+        addPageNumberToOverlay(overlayPath, i + 1)
+    );
+    yield {event: 'update', data: {message: `numbering all images`}};
+    await Promise.all(numberingPromises);
 }
 
 export default SliceComic;
-export { getComicFormat, supportedFormats, type ComicFormat };
+export {getComicFormat, supportedFormats, type ComicFormat};

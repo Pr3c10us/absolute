@@ -2,9 +2,811 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absolute | Comic Audio Synthesis</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Space+Grotesk:wght@300;500;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- RESET & VARIABLES --- */
+        :root {
+            --bg-void: #030303;
+            --glass-surface: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+            --accent-active: #fff;
+            --ease-elastic: cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+
+        body {
+            background-color: var(--bg-void);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* --- ATMOSPHERE --- */
+        .ambient-noise {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0MDAnIGhlaWdodD0nNDAwJz48ZmlsdGVyIGlkPSdub2lzZUZpbHRlcic+PHZlVHVyYnVsZW5jZSB0eXBlPSdmcmFjdGFsTm9pc2UnIGJhc2VGcmVxdWVuY3k9JzAuNjUnIG51bU9jdGF2ZXM9JzMnIHN0aXRjaFRpbGVzPSdzdGl0Y2gnLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0nMTAwJScgaGVpZ2h0PScxMDAlJyBmaWx0ZXI9J3VybCgjbm9pc2VGaWx0ZXIpJyBvcGFjaXR5PScwLjAzJy8+PC9zdmc+');
+            pointer-events: none; z-index: 2;
+        }
+
+        .ambient-light {
+            position: fixed; width: 800px; height: 800px;
+            background: radial-gradient(circle, rgba(60,60,70,0.15) 0%, rgba(0,0,0,0) 70%);
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 1; animation: breathe 10s infinite alternate ease-in-out;
+        }
+
+        /* --- MONOLITH (MAIN CARD) --- */
+        .monolith {
+            position: relative; z-index: 10;
+            width: 500px;
+            padding: 40px;
+            background: var(--glass-surface);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 20px 80px -10px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; gap: 20px;
+            transition: all 0.6s var(--ease-elastic);
+            overflow: visible;
+        }
+
+        .monolith::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); opacity: 0.5;
+        }
+
+        /* --- HEADER --- */
+        .header { display: flex; justify-content: space-between; align-items: center; }
+        .brand {
+            font-family: 'Space Grotesk', sans-serif; font-weight: 700;
+            font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-primary);
+        }
+        .status-dot { width: 8px; height: 8px; background: #333; border-radius: 50%; transition: all 0.3s; }
+        .status-dot.active { background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.8); }
+        .status-dot.error { background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+
+        /* --- CONFIG FORM --- */
+        .config-area {
+            display: flex; flex-direction: column; gap: 8px;
+            overflow: visible;
+            position: relative;
+        }
+
+        .input-group {
+            position: relative;
+            z-index: 50;
+        }
+
+        .input-label {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--text-secondary); margin-bottom: 6px; display: block;
+        }
+
+        /* Custom Select */
+        .custom-select-wrapper { position: relative; user-select: none; width: 100%; z-index: 100; }
+        .custom-select-trigger {
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; padding: 12px 16px; border-radius: 12px; font-size: 13px;
+            display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.3s;
+        }
+        .custom-select-trigger:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); }
+        .custom-select-trigger::after { content: '▼'; font-size: 8px; opacity: 0.5; transition: transform 0.2s; }
+        .custom-select-wrapper.open .custom-select-trigger::after { transform: rotate(180deg); }
+        .custom-options {
+            position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+            background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto;
+            opacity: 0; visibility: hidden; transform: translateY(-10px);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1000;
+            pointer-events: none;
+        }
+        .custom-select-wrapper.open .custom-options {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .custom-option { padding: 10px 16px; font-size: 13px; color: #aaa; cursor: pointer; transition: 0.2s; }
+        .custom-option:hover { background: rgba(255,255,255,0.05); color: #fff; }
+        .custom-option.selected { background: rgba(255,255,255,0.1); color: #fff; }
+        .custom-options::-webkit-scrollbar { width: 4px; }
+        .custom-options::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+        textarea {
+            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff;
+            padding: 12px; border-radius: 12px; font-family: 'Inter', sans-serif; font-size: 13px;
+            transition: all 0.3s; resize: none;
+        }
+        textarea:focus { border-color: rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); }
+
+        .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .toggle-checkbox { display: none; }
+        .toggle-switch {
+            width: 32px; height: 18px; background: rgba(255,255,255,0.1); border-radius: 20px; position: relative; transition: 0.3s;
+        }
+        .toggle-switch::after {
+            content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; background: #888; border-radius: 50%; transition: 0.3s;
+        }
+        .toggle-checkbox:checked + .toggle-switch { background: rgba(255,255,255,0.2); }
+        .toggle-checkbox:checked + .toggle-switch::after { transform: translateX(14px); background: #fff; }
+        .toggle-label { font-size: 13px; color: var(--text-primary); }
+
+        #directorInput { height: 0; overflow: hidden; opacity: 0; transition: all 0.4s ease; margin-top: 0; }
+        #directorInput.visible { height: 80px; opacity: 1; margin-top: 10px; }
+        #contextInput { height: 0; overflow: hidden; opacity: 0; transition: all 0.4s ease; margin-top: 0; }
+        #contextInput.visible { height: 80px; opacity: 1; margin-top: 10px; }
+
+        /* --- UPLOAD STATE --- */
+        .state-upload { transition: opacity 0.4s; overflow: visible; }
+        .drop-target {
+            height: 140px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: all 0.3s ease; cursor: pointer; margin-top: 10px;
+        }
+        .drop-target:hover, .drop-target.drag-over { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.02); }
+        .upload-icon { font-size: 20px; margin-bottom: 10px; opacity: 0.7; }
+        .cta-text { font-size: 12px; color: var(--text-secondary); pointer-events: none; }
+
+        /* --- PROCESSING STATE --- */
+        .state-process { display: none; flex-direction: column; }
+        .main-status {
+            font-family: 'Space Grotesk', sans-serif; font-size: 28px; line-height: 1.1; font-weight: 300;
+            margin-bottom: 10px; background: linear-gradient(180deg, #fff, #888);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        /* Meta Log & History Controls */
+        .log-controls {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+        }
+        .meta-log {
+            font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text-secondary);
+            height: 20px; overflow: hidden; display: flex; align-items: center; gap: 8px;
+        }
+
+        .btn-history-toggle {
+            background: transparent; border: none; color: #555;
+            font-family: 'Space Grotesk'; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+            cursor: pointer; transition: 0.2s;
+        }
+        .btn-history-toggle:hover { color: #fff; }
+
+        /* The Hidden Log Drawer */
+        .log-history {
+            height: 0; overflow-y: auto; overflow-x: hidden;
+            background: rgba(0,0,0,0.3); border-radius: 8px;
+            font-family: 'Courier Prime', monospace; font-size: 11px; color: #888;
+            transition: height 0.4s var(--ease-elastic), margin-bottom 0.4s;
+            margin-bottom: 0;
+            border: 1px solid transparent;
+        }
+
+        .log-history.visible {
+            height: 120px; margin-bottom: 20px; border-color: rgba(255,255,255,0.05);
+        }
+
+        .history-item {
+            padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.02);
+            display: flex; gap: 10px; animation: slideInLeft 0.3s forwards;
+        }
+        .history-time { color: #444; min-width: 60px; }
+        .history-msg { color: #aaa; }
+
+        .log-history::-webkit-scrollbar { width: 4px; }
+        .log-history::-webkit-scrollbar-track { background: transparent; }
+        .log-history::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+        /* Progress & Artifacts */
+        .progress-container {
+            width: 100%; height: 2px; background: rgba(255,255,255,0.1);
+            position: relative; overflow: hidden; border-radius: 2px; margin-top: 20px;
+        }
+        .progress-bar {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+            background: #fff; box-shadow: 0 0 15px rgba(255,255,255,0.5);
+            transition: width 0.5s ease-out;
+        }
+        .artifacts {
+            display: flex; gap: 12px; margin-top: 20px;
+            opacity: 0; transform: translateY(10px); transition: all 0.6s ease;
+        }
+        .artifacts.visible { opacity: 1; transform: translateY(0); }
+        .chip {
+            padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 100px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+            color: #555; transition: all 0.4s; display: flex; align-items: center; gap: 6px;
+        }
+        .chip.active { color: #fff; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); }
+        .chip.interactive { cursor: pointer; box-shadow: 0 0 10px rgba(255,255,255,0.1); }
+        .chip.interactive:hover { background: rgba(255,255,255,0.2); transform: translateY(-1px); }
+        .chip-dot { width: 4px; height: 4px; background: currentColor; border-radius: 50%; }
+
+        .btn-cancel {
+            padding: 10px 24px; background: transparent;
+            border: 1px solid rgba(255,255,255,0.15); color: #666;
+            border-radius: 30px; font-family: 'Space Grotesk', sans-serif;
+            text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .btn-cancel:hover { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.1); }
+
+        .main-wrapper {
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+            position: relative; z-index: 10;
+        }
+
+        /* --- SCRIPT MODAL --- */
+        .script-modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 100;
+            display: none; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;
+        }
+        .script-modal-backdrop.active { display: flex; opacity: 1; }
+        .script-modal {
+            width: 90%; max-width: 600px; height: 80vh; background: #0e0e0e;
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); display: flex; flex-direction: column;
+            transform: scale(0.95); transition: transform 0.3s ease;
+        }
+        .script-modal-backdrop.active .script-modal { transform: scale(1); }
+        .modal-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .modal-title { font-family: 'Space Grotesk'; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: #fff; }
+        .btn-close-modal { background: transparent; border: none; color: #666; cursor: pointer; font-size: 18px; transition: 0.2s; }
+        .btn-close-modal:hover { color: #fff; }
+        .script-content {
+            flex: 1; padding: 30px; overflow-y: auto; font-family: 'Courier Prime', monospace;
+            font-size: 14px; line-height: 1.6; color: #d4d4d8; white-space: pre-wrap;
+        }
+        .script-content::-webkit-scrollbar { width: 6px; }
+        .script-content::-webkit-scrollbar-track { background: #0e0e0e; }
+        .script-content::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+        /* --- VIDEO RESULT --- */
+        .video-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 20; opacity: 0; pointer-events: none;
+            transition: opacity 1s ease; display: flex; flex-direction: column;
+            border-radius: 24px; overflow: hidden;
+        }
+        .video-overlay.active { opacity: 1; pointer-events: all; }
+        video { width: 100%; flex: 1; object-fit: contain; background: #000; }
+        .result-controls {
+            padding: 20px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 15px; background: #050505;
+        }
+        .btn-view-script {
+            background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 10px 24px;
+            border-radius: 30px; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase;
+            font-size: 12px; letter-spacing: 0.1em; cursor: pointer; transition: 0.3s;
+        }
+        .btn-view-script:hover { background: rgba(255,255,255,0.1); }
+        .btn-reset {
+            background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 10px 24px;
+            border-radius: 30px; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase;
+            font-size: 12px; letter-spacing: 0.1em; cursor: pointer; transition: 0.3s;
+        }
+        .btn-reset:hover { background: #fff; color: #000; }
+
+        .hidden { display: none !important; }
+        @keyframes breathe { 0% { opacity: 0.3; transform: translate(-50%, -50%) scale(0.9); } 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); } }
+        @keyframes slideInLeft { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+    </style>
 </head>
 <body>
 
+<div class="ambient-noise"></div>
+<div class="ambient-light"></div>
+
+<div class="script-modal-backdrop" id="scriptModalBackdrop">
+    <div class="script-modal">
+        <div class="modal-header">
+            <span class="modal-title">Generated Screenplay</span>
+            <button class="btn-close-modal" id="btnCloseModal">✕</button>
+        </div>
+        <div class="script-content" id="scriptContentArea"></div>
+    </div>
+</div>
+
+<div class="main-wrapper">
+    <div class="monolith">
+        <div class="header">
+            <div class="brand">Absolute</div>
+            <div class="status-dot" id="statusDot"></div>
+        </div>
+
+        <div id="viewUpload" class="state-upload">
+            <div class="config-area">
+                <div class="input-group" style="margin-bottom: 20px">
+                    <label class="input-label">Voice Model</label>
+                    <div class="custom-select-wrapper" id="customSelect">
+                        <div class="custom-select-trigger" id="selectTrigger"><span>Select Voice</span></div>
+                        <div class="custom-options" id="customOptions"></div>
+                        <input type="hidden" id="voiceSelectInput" value="Gacrux">
+                    </div>
+                </div>
+                <div class="input-group" style="z-index: 1;">
+                    <label class="toggle-row">
+                        <input type="checkbox" class="toggle-checkbox" id="directorToggle">
+                        <div class="toggle-switch"></div>
+                        <span class="toggle-label">Director Mode</span>
+                    </label>
+                    <textarea id="directorInput" placeholder="Enter voice style instructions..."></textarea>
+                </div>
+                <div class="input-group" style="z-index: 1;">
+                    <label class="toggle-row">
+                        <input type="checkbox" class="toggle-checkbox" id="contextToggle">
+                        <div class="toggle-switch"></div>
+                        <span class="toggle-label">Context</span>
+                    </label>
+                    <textarea id="contextInput" placeholder="Enter additional context about the comic..."></textarea>
+                </div>
+            </div>
+            <input type="file" id="fileInput" accept=".cbr,.cb7,.cbz" hidden>
+            <div class="drop-target" id="dropTarget">
+                <div class="upload-icon">⊕</div>
+                <div class="cta-text">Drag Comic File to Begin</div>
+            </div>
+        </div>
+
+        <div class="state-process" id="viewProcess">
+            <div class="main-status" id="mainStatus">Initializing</div>
+
+            <div class="log-controls">
+                <div class="meta-log" id="metaLog"><span>Ready...</span></div>
+                <button class="btn-history-toggle" id="btnHistoryToggle">Show History</button>
+            </div>
+
+            <div class="log-history" id="logHistory">
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+
+            <div class="artifacts" id="artifactRow">
+                <div class="chip" id="chipScript">
+                    <div class="chip-dot"></div> Script <span style="margin-left:5px; opacity:0.5; font-size:9px;">(View)</span>
+                </div>
+                <div class="chip" id="chipAudio"><div class="chip-dot"></div> Splits</div>
+                <div class="chip" id="chipVideo"><div class="chip-dot"></div> Video</div>
+            </div>
+        </div>
+
+        <div class="video-overlay" id="viewResult">
+            <video id="finalVideo" controls><source src="" type="video/mp4"></video>
+            <div class="result-controls">
+                <button class="btn-view-script" id="btnViewScript">View Script</button>
+                <button class="btn-reset" id="btnReset">Create New Experience</button>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn-cancel hidden" id="btnCancel">Cancel</button>
+</div>
+
+<script>
+    // --- DATA ---
+    const voices = [
+        "Gacrux", "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus",
+        "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel",
+        "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia",
+        "Achernar", "Alnilam", "Schedar", "Pulcherrima", "Achird",
+        "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
+    ];
+
+    // --- DOM REFERENCES ---
+    const dropTarget = document.getElementById('dropTarget');
+    const fileInput = document.getElementById('fileInput');
+    const voiceSelectInput = document.getElementById('voiceSelectInput');
+    const directorToggle = document.getElementById('directorToggle');
+    const directorInput = document.getElementById('directorInput');
+    const contextToggle = document.getElementById('contextToggle');
+    const contextInput = document.getElementById('contextInput');
+
+    const viewUpload = document.getElementById('viewUpload');
+    const viewProcess = document.getElementById('viewProcess');
+    const viewResult = document.getElementById('viewResult');
+    const statusDot = document.getElementById('statusDot');
+    const metaLogEl = document.getElementById('metaLog');
+    const logHistoryEl = document.getElementById('logHistory');
+    const btnHistoryToggle = document.getElementById('btnHistoryToggle');
+    const progressBar = document.getElementById('progressBar');
+    const btnReset = document.getElementById('btnReset');
+    const finalVideo = document.getElementById('finalVideo');
+    const btnViewScript = document.getElementById('btnViewScript');
+
+    const modalBackdrop = document.getElementById('scriptModalBackdrop');
+    const btnCloseModal = document.getElementById('btnCloseModal');
+    const scriptContentArea = document.getElementById('scriptContentArea');
+    const chipScript = document.getElementById('chipScript');
+
+    const customSelect = document.getElementById('customSelect');
+    const selectTrigger = document.getElementById('selectTrigger');
+    const customOptions = document.getElementById('customOptions');
+    const btnCancel = document.getElementById('btnCancel');
+
+    let generatedScriptText = null;
+    let abortController = null;
+    let jobCompleted = false;
+
+    // --- INIT ---
+    function initCustomSelect() {
+        const sortedVoices = [...voices].sort();
+        sortedVoices.forEach(v => {
+            const opt = document.createElement('div');
+            opt.className = 'custom-option';
+            opt.textContent = v;
+            if(v === 'Gacrux') {
+                opt.classList.add('selected');
+                selectTrigger.querySelector('span').textContent = v;
+                voiceSelectInput.value = v;
+            }
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectTrigger.querySelector('span').textContent = v;
+                customOptions.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                voiceSelectInput.value = v;
+                customSelect.classList.remove('open');
+            });
+            customOptions.appendChild(opt);
+        });
+
+        selectTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            customSelect.classList.toggle('open');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!customSelect.contains(e.target)) {
+                customSelect.classList.remove('open');
+            }
+        });
+    }
+    initCustomSelect();
+
+    // --- UI LOGIC ---
+    directorToggle.addEventListener('change', (e) => {
+        if(e.target.checked) { directorInput.classList.add('visible'); directorInput.focus(); }
+        else { directorInput.classList.remove('visible'); }
+    });
+
+    contextToggle.addEventListener('change', (e) => {
+        if(e.target.checked) { contextInput.classList.add('visible'); contextInput.focus(); }
+        else { contextInput.classList.remove('visible'); }
+    });
+
+    // Toggle History Drawer
+    btnHistoryToggle.addEventListener('click', () => {
+        logHistoryEl.classList.toggle('visible');
+        btnHistoryToggle.textContent = logHistoryEl.classList.contains('visible') ? "Hide History" : "Show History";
+    });
+
+    dropTarget.addEventListener('click', () => fileInput.click());
+    dropTarget.addEventListener('dragover', (e) => { e.preventDefault(); dropTarget.classList.add('drag-over'); });
+    dropTarget.addEventListener('dragleave', () => dropTarget.classList.remove('drag-over'));
+    dropTarget.addEventListener('drop', (e) => {
+        e.preventDefault(); dropTarget.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) startJob(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) startJob(e.target.files[0]);
+    });
+
+    btnReset.addEventListener('click', resetApplication);
+    btnCloseModal.addEventListener('click', () => modalBackdrop.classList.remove('active'));
+
+    btnViewScript.addEventListener('click', () => {
+        if (!generatedScriptText) return;
+        scriptContentArea.textContent = generatedScriptText;
+        modalBackdrop.classList.add('active');
+    });
+
+    chipScript.addEventListener('click', () => {
+        if (!generatedScriptText) return;
+        scriptContentArea.textContent = generatedScriptText;
+        modalBackdrop.classList.add('active');
+    });
+
+    modalBackdrop.addEventListener('click', (e) => {
+        if (e.target === modalBackdrop) {
+            modalBackdrop.classList.remove('active');
+        }
+    });
+
+    btnCancel.addEventListener('click', () => {
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+        }
+        addToHistory("Job cancelled by user");
+        statusDot.classList.remove('active', 'error');
+        resetApplication();
+    });
+
+    // --- SCRAMBLER ---
+    class TextScramble {
+        constructor(el) {
+            this.el = el;
+            this.chars = '!<>-_\\/[]{}—=+*^?#________';
+            this.update = this.update.bind(this);
+        }
+        setText(newText) {
+            const oldText = this.el.innerText;
+            const length = Math.max(oldText.length, newText.length);
+            const promise = new Promise((resolve) => this.resolve = resolve);
+            this.queue = [];
+            for (let i = 0; i < length; i++) {
+                const from = oldText[i] || '';
+                const to = newText[i] || '';
+                const start = Math.floor(Math.random() * 40);
+                const end = start + Math.floor(Math.random() * 40);
+                this.queue.push({ from, to, start, end });
+            }
+            cancelAnimationFrame(this.frameRequest);
+            this.frame = 0;
+            this.update();
+            return promise;
+        }
+        update() {
+            let output = '';
+            let complete = 0;
+            for (let i = 0, n = this.queue.length; i < n; i++) {
+                let { from, to, start, end, char } = this.queue[i];
+                if (this.frame >= end) { complete++; output += to; }
+                else if (this.frame >= start) {
+                    if (!char || Math.random() < 0.28) {
+                        char = this.chars[Math.floor(Math.random() * this.chars.length)];
+                        this.queue[i].char = char;
+                    }
+                    output += `<span class="dud">${char}</span>`;
+                } else { output += from; }
+            }
+            this.el.innerHTML = output;
+            if (complete === this.queue.length) { this.resolve(); }
+            else { this.frameRequest = requestAnimationFrame(this.update); this.frame++; }
+        }
+    }
+    const scrambler = new TextScramble(document.getElementById('mainStatus'));
+
+    // Check for video in URL on page load
+    function checkUrlForVideo() {
+        const params = new URLSearchParams(window.location.search);
+        const videoUrl = params.get('video');
+        if (videoUrl) {
+            viewUpload.classList.add('hidden');
+            viewProcess.classList.add('hidden');
+            finalVideo.src = videoUrl;
+            viewResult.classList.add('active');
+        }
+    }
+    checkUrlForVideo();
+
+
+    // --- MAIN LOGIC ---
+    function startJob(file) {
+        const selectedVoice = voiceSelectInput.value;
+        const styleInstruction = directorToggle.checked ? directorInput.value : '';
+        const context = contextToggle.checked ? contextInput.value : '';
+
+        viewUpload.style.opacity = '0';
+        setTimeout(() => {
+            viewUpload.classList.add('hidden');
+            viewProcess.classList.remove('hidden');
+            viewProcess.style.display = 'flex';
+            btnCancel.classList.remove('hidden');
+            setTimeout(() => document.getElementById('artifactRow').classList.add('visible'), 500);
+        }, 400);
+
+        connectAndStream(file, selectedVoice, styleInstruction, context);
+    }
+
+    async function connectAndStream(file, voice, instruction, context) {
+        const formData = new FormData();
+        formData.append('files', file);
+        formData.append('voice', voice);
+        if (instruction && instruction.trim() !== "") {
+            formData.append('voiceStyleInstruction', instruction);
+        }
+        if (context && context.trim() !== "") {
+            formData.append('context', context);
+        }
+
+        abortController = new AbortController();
+        jobCompleted = false;
+        statusDot.classList.remove('error');
+        statusDot.classList.add('active');
+
+        try {
+            const response = await fetch('http://localhost:5000/api/v1/generate', {
+                method: 'POST', body: formData, credentials: 'include',
+                signal: abortController.signal
+            });
+
+            if (!response.ok) throw new Error("Server Connection Failed");
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
+            updateUI("Connecting", "Handshake established...", 5);
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop();
+                for (const line of lines) parseSSEEvent(line);
+            }
+
+            // Check if connection closed without completing
+            if (!jobCompleted) {
+                throw new Error("Connection closed unexpectedly");
+            }
+
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('Request cancelled');
+                statusDot.classList.remove('active');
+                return;
+            }
+            console.error(error);
+            statusDot.classList.remove('active');
+            statusDot.classList.add('error');
+            updateUI("Connection Error", error.message || "Check console for details", 0);
+            addToHistory("Error: " + (error.message || "Connection failed"));
+        }
+    }
+
+    function parseSSEEvent(eventString) {
+        const lines = eventString.split('\n');
+        let eventType = 'message';
+        let data = null;
+
+        lines.forEach(line => {
+            if (line.startsWith('event: ')) eventType = line.replace('event: ', '').trim();
+            if (line.startsWith('data: ')) {
+                try { data = JSON.parse(line.replace('data: ', '')); }
+                catch (e) { console.log('JSON Parse Error', e); }
+            }
+        });
+
+        if (data) handleServerData(eventType, data);
+    }
+
+    let currentProgress = 5;
+
+    function handleServerData(event, data) {
+        // 1. STATUS UPDATE & HISTORY LOGGING
+        if (event === 'update' && data.message) {
+            const msg = data.message.toLowerCase();
+
+            // Add to History
+            addToHistory(data.message);
+
+            // Scrambler Logic
+            if (msg.includes("extracting")) updateUI("Extraction", "Extracting panels...", 15);
+            else if (msg.includes("detecting")) updateUI("Vision", "Detecting panels...", 25);
+            else if (msg.includes("script")) updateUI("Scripting", "Generating screenplay...", 40);
+            else if (msg.includes("splitting")) updateUI("Audio Prep", "Splitting script...", 55);
+            else if (msg.includes("converting") || msg.includes("generated")) {
+                currentProgress = Math.min(currentProgress + 2, 85);
+                updateUI(null, data.message, currentProgress);
+                document.getElementById('chipAudio').classList.add('active');
+            }
+            else if (msg.includes("merging")) updateUI("Rendering", "Merging streams...", 95);
+            else if (msg.includes("complete")) {
+                jobCompleted = true;
+                updateUI("Finalizing", "Done", 100);
+                finishJob(data.video);
+            }
+            else updateUI(null, data.message, currentProgress);
+        }
+
+        // 2. DATA EVENTS
+        if (event === 'script') {
+            if (data.script) {
+                generatedScriptText = typeof data.script === 'object' ? JSON.stringify(data.script, null, 2) : data.script;
+                chipScript.classList.add('active', 'interactive');
+                updateUI(null, "Script ready to view", null);
+                addToHistory("Artifact Received: Screenplay");
+            }
+        }
+        if (event === 'split') {
+            document.getElementById('chipAudio').classList.add('active');
+            addToHistory("Artifact Received: Audio Splits");
+        }
+    }
+
+    function addToHistory(message) {
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `<span class="history-time">[${time}]</span> <span class="history-msg">${message}</span>`;
+
+        // Prepend so newest is top, or append? Usually log is append.
+        // Let's append and auto scroll.
+        logHistoryEl.appendChild(item);
+        logHistoryEl.scrollTop = logHistoryEl.scrollHeight;
+    }
+
+    function updateUI(mainMsg, subMsg, progress) {
+        if (mainMsg) scrambler.setText(mainMsg);
+        if (subMsg) metaLogEl.innerHTML = `<span>> ${subMsg}</span>`;
+        if (progress !== null && progress !== undefined) {
+            currentProgress = progress;
+            progressBar.style.width = `${progress}%`;
+        }
+    }
+
+    function finishJob(videoUrl) {
+        document.getElementById('chipVideo').classList.add('active');
+        addToHistory("Job Complete. Video Ready.");
+        btnCancel.classList.add('hidden');
+        statusDot.classList.remove('active');
+
+        // Update URL with video query parameter
+        if (videoUrl) {
+            const url = new URL(window.location);
+            url.searchParams.set('video', videoUrl);
+            window.history.pushState({}, '', url);
+        }
+
+        setTimeout(() => {
+            finalVideo.src = videoUrl || "";
+            viewResult.classList.add('active');
+            finalVideo.play();
+        }, 1000);
+    }
+
+    function resetApplication() {
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+        }
+        jobCompleted = false;
+        currentProgress = 0;
+        progressBar.style.width = '0%';
+        fileInput.value = '';
+        finalVideo.pause();
+        finalVideo.src = '';
+        generatedScriptText = null;
+        logHistoryEl.innerHTML = ''; // Clear History
+        logHistoryEl.classList.remove('visible'); // Hide drawer
+        btnHistoryToggle.textContent = "Show History";
+
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active', 'interactive'));
+        viewResult.classList.remove('active');
+        viewProcess.classList.add('hidden');
+        viewUpload.classList.remove('hidden');
+        btnCancel.classList.add('hidden');
+
+        // Clear video query parameter from URL
+        const url = new URL(window.location);
+        url.searchParams.delete('video');
+        window.history.replaceState({}, '', url);
+
+        setTimeout(() => {
+            viewUpload.style.opacity = '1';
+            scrambler.setText("Initializing");
+        }, 100);
+    }
+
+</script>
 </body>
 </html>
