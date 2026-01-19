@@ -1,12 +1,12 @@
-import {createExtractorFromFile} from 'node-unrar-js';
+import { createExtractorFromFile } from 'node-unrar-js';
 import AdmZip from 'adm-zip';
 import Seven from 'node-7z';
 import sevenBin from '7zip-bin';
 import * as tar from 'tar';
-import sharp, {type Metadata, type Sharp} from 'sharp';
+import sharp, { type Metadata, type Sharp } from 'sharp';
 import fs from 'fs';
 import path from 'path';
-import {DetectAndExtractPanels} from "./segments.ts";
+import { DetectAndExtractPanels } from "./segments.ts";
 
 interface Panel {
     minX: number;
@@ -93,12 +93,12 @@ async function addPageNumberToOverlay(imagePath: string, pageNumber: number): Pr
     const sampleSize = Math.min(100, Math.floor(Math.min(metadata.width, metadata.height) / 4));
     const sampleX = Math.max(0, metadata.width - sampleSize - 10);
     const sampleY = Math.max(0, metadata.height - sampleSize - 10);
-    const {data: sampleData} = await image
+    const { data: sampleData } = await image
         .clone()
-        .extract({left: sampleX, top: sampleY, width: sampleSize, height: sampleSize})
+        .extract({ left: sampleX, top: sampleY, width: sampleSize, height: sampleSize })
         .grayscale()
         .raw()
-        .toBuffer({resolveWithObject: true});
+        .toBuffer({ resolveWithObject: true });
 
     // Calculate average brightness (0-255)
     let totalBrightness = 0;
@@ -143,7 +143,7 @@ async function addPageNumberToOverlay(imagePath: string, pageNumber: number): Pr
 
     // Save numbered image to temp path, then replace original
     await sharp(imageBuffer)
-        .composite([{input: overlaySvg, top: 0, left: 0}])
+        .composite([{ input: overlaySvg, top: 0, left: 0 }])
         .toFile(tempPath);
 
     // Replace original with temp
@@ -169,42 +169,55 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
         const processingWidth = 1000;
         const scale = metadata.width / processingWidth;
 
-        const {data: buffer, info} = await image
+        const { data: buffer, info } = await image
             .clone()
             .resize(processingWidth)
             .grayscale()
             .threshold(240)
             .raw()
-            .toBuffer({resolveWithObject: true});
+            .toBuffer({ resolveWithObject: true });
 
-        const width = info.width;
-        const height = info.height;
-
-        const visited = new Uint8Array(width * height);
+        const visited = new Uint8Array(info.width * info.height);
         const panels: Panel[] = [];
-        const idx = (x: number, y: number): number => y * width + x;
 
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
+        // function to assign a unique id to each pixel
+        const idx = (x: number, y: number): number => y * info.width + x;
+
+        // loop over vertical pixels
+        for (let y = 0; y < info.height; y++) {
+            // loop over each horizontal pixels
+            for (let x = 0; x < info.width; x++) {
+                // get pixel id
                 const i = idx(x, y);
+                // check if pixel is black and unvisited
                 if (buffer[i] === 0 && visited[i] === 0) {
-                    const panel: Panel = {minX: x, maxX: x, minY: y, maxY: y, pixelCount: 0};
+                    // panel starts at the pixel
+                    const panel: Panel = { minX: x, maxX: x, minY: y, maxY: y, pixelCount: 0 };
+                    // create queue for bfs operation
                     const queue: number[] = [x, y];
+                    // mark pixel as visited
                     visited[i] = 1;
 
                     while (queue.length > 0) {
+                        // get current pixel pixel axis
                         const cy = queue.pop()!;
                         const cx = queue.pop()!;
 
+                        // increment pixel size
                         panel.pixelCount++;
+                        // update panel boundary if new pixel x position is less than current minX, or greater than maxX
                         if (cx < panel.minX) panel.minX = cx;
                         if (cx > panel.maxX) panel.maxX = cx;
+                        // update panel boundary if new pixel y position is less than current minY, or greater than maxY
                         if (cy < panel.minY) panel.minY = cy;
                         if (cy > panel.maxY) panel.maxY = cy;
 
+                        // get pixel neighbours and loop over them
                         const neighbors: [number, number][] = [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]];
                         for (const [nx, ny] of neighbors) {
-                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                            // if pixel is not out of image bound, unvisited and black
+                            // add pixel to the queue and mark as visited
+                            if (nx >= 0 && nx < info.width && ny >= 0 && ny < info.height) {
                                 const ni = idx(nx, ny);
                                 if (buffer[ni] === 0 && visited[ni] === 0) {
                                     visited[ni] = 1;
@@ -222,7 +235,7 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
             .filter(p => {
                 const w = p.maxX - p.minX;
                 const h = p.maxY - p.minY;
-                return (w > 50 && h > 50 && p.pixelCount > 1000);
+                return (w > 250 && h > 250 && p.pixelCount > 2000);
             })
             .map(p => ({
                 left: Math.floor(p.minX * scale),
@@ -235,7 +248,7 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
 
         const panelsDir = path.join(dir, name);
         if (!fs.existsSync(panelsDir)) {
-            fs.mkdirSync(panelsDir, {recursive: true});
+            fs.mkdirSync(panelsDir, { recursive: true });
         }
 
         let count = 1;
@@ -258,24 +271,40 @@ async function detectAndCropPanels(imagePath: string, deleteOriginal: boolean = 
         const enhancedPath = path.join(dir, `${name}.png`);
 
         await sharp(imageBuffer)
-            .composite([{input: overlaySvg, top: 0, left: 0}])
+            .composite([{ input: overlaySvg, top: 0, left: 0 }])
             .toFile(enhancedPath);
 
         if (deleteOriginal) {
             fs.unlinkSync(fullPath);
         }
 
-        return {panels: outputPanels.length, success: true};
+        return { panels: outputPanels.length, success: true };
     } catch (err) {
         const error = err as Error;
         console.error(`  Error: ${error.message}`);
-        return {panels: 0, success: false};
+        return { panels: 0, success: false };
     }
 }
 
-async function extractCBZ(filePath: string, outputDir: string) {
+async function extractCBR(filePath: string, outputDir: string): Promise<number> {
+    const extractor = await createExtractorFromFile({
+        filepath: filePath,
+        targetPath: outputDir,
+    });
+
+    const { files } = extractor.extract();
+    let count = 0;
+    for (const file of files) {
+        if (!file.fileHeader.flags.directory) count++;
+    }
+    return count;
+}
+
+// Extract CBZ (ZIP archive)
+async function extractCBZ(filePath: string, outputDir: string): Promise<number> {
     const zip = new AdmZip(filePath);
     const entries = zip.getEntries();
+    let count = 0;
 
     for (const entry of entries) {
         if (!entry.isDirectory) {
@@ -283,22 +312,53 @@ async function extractCBZ(filePath: string, outputDir: string) {
             const targetDir = path.dirname(targetPath);
 
             if (!fs.existsSync(targetDir)) {
-                fs.mkdirSync(targetDir, {recursive: true});
+                fs.mkdirSync(targetDir, { recursive: true });
             }
 
             fs.writeFileSync(targetPath, entry.getData());
+            count++;
         }
     }
+    return count;
 }
 
-async function extractCB7(filePath: string, outputDir: string) {
+// Extract CB7 (7-Zip archive)
+async function extractCB7(filePath: string, outputDir: string): Promise<number> {
     return new Promise((resolve, reject) => {
+        let count = 0;
         const stream = Seven.extractFull(filePath, outputDir, {
             $bin: sevenBin.path7za,
             recursive: true,
         });
+
+        stream.on('data', () => count++);
+        stream.on('end', () => resolve(count));
         stream.on('error', (err: any) => reject(err));
     });
+}
+
+// Extract CBT (TAR archive)
+async function extractCBT(filePath: string, outputDir: string): Promise<number> {
+    await tar.extract({
+        file: filePath,
+        cwd: outputDir,
+    });
+
+    // Count extracted files
+    let count = 0;
+    const countFiles = (dir: string) => {
+        const items = fs.readdirSync(dir);
+        for (const item of items) {
+            const itemPath = path.join(dir, item);
+            if (fs.statSync(itemPath).isDirectory()) {
+                countFiles(itemPath);
+            } else {
+                count++;
+            }
+        }
+    };
+    countFiles(outputDir);
+    return count;
 }
 
 async function* SliceComic(
@@ -323,40 +383,37 @@ async function* SliceComic(
         : path.join(path.dirname(fullPath), folderName);
 
     if (fs.existsSync(outputDir)) {
-        fs.rmSync(outputDir, {recursive: true, force: true});
+        fs.rmSync(outputDir, { recursive: true, force: true });
     }
-    fs.mkdirSync(outputDir, {recursive: true});
+    fs.mkdirSync(outputDir, { recursive: true });
 
     try {
-        yield {event: 'update', data: {message: `extracting images`}};
+        yield { event: 'update', data: { message: `extracting images` } };
 
         switch (format) {
             case 'cbr':
-                await createExtractorFromFile({
-                    filepath: fullPath,
-                    targetPath: outputDir,
-                });
+                 await extractCBR(fullPath, outputDir);
                 break;
             case 'cbz':
-                await extractCBZ(fullPath, outputDir);
+                 await extractCBZ(fullPath, outputDir);
                 break;
             case 'cb7':
-                await extractCB7(fullPath, outputDir);
+                 await extractCB7(fullPath, outputDir);
                 break;
             case 'cbt':
-                await tar.extract({
-                    file: fullPath,
-                    cwd: outputDir,
-                });
+                 await extractCBT(fullPath, outputDir);
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
+
+
     } catch (error) {
         const err = error as Error;
         throw new Error(`Error extracting ${format.toUpperCase()} file: ${err.message}`);
     }
 
+    // Recursively find all image files
     const findImages = (dir: string): string[] => {
         const results: string[] = [];
         const items = fs.readdirSync(dir);
@@ -379,21 +436,23 @@ async function* SliceComic(
 
     const imageFiles = findImages(outputDir).sort();
 
+    // Create blurred cover image from the first page
     if (imageFiles.length > 0) {
-        yield {event: 'update', data: {message: 'creating video background'}};
+        yield { event: 'update', data: { message: 'creating video background' } };
         const firstImagePath = imageFiles[0]!;
         const coverBlurPath = path.join(outputDir, 'cover_blur.jpg');
         await sharp(firstImagePath)
             .blur(20)
-            .jpeg({quality: 80})
+            .jpeg({ quality: 80 })
             .toFile(coverBlurPath);
     }
 
+    // First, detect and extract panels from all images (deletes originals, creates overlay .png files)
     const extractPanelPromises = imageFiles.map((imagePath) =>
         // DetectAndExtractPanels(imagePath, true)
         detectAndCropPanels(imagePath, true)
     );
-    yield {event: 'update', data: {message: `detecting and extracting panels from pages`}};
+    yield { event: 'update', data: { message: `detecting and extracting panels from pages` } };
     await Promise.all(extractPanelPromises);
 
     // Now add page numbers to the overlay images (the .png files created by panel detection)
@@ -407,9 +466,9 @@ async function* SliceComic(
     const numberingPromises = overlayImages.map((overlayPath, i) =>
         addPageNumberToOverlay(overlayPath, i + 1)
     );
-    yield {event: 'update', data: {message: `numbering all images`}};
+    yield { event: 'update', data: { message: `numbering all images` } };
     await Promise.all(numberingPromises);
 }
 
 export default SliceComic;
-export {getComicFormat, supportedFormats, type ComicFormat};
+export { getComicFormat, supportedFormats, type ComicFormat };

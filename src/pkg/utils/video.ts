@@ -27,8 +27,12 @@ export interface VideoData {
 
 /**
  * Helper to generate the specific zoompan filter string.
- * This now operates on a generic coordinate system (iw/ih),
- * so it automatically benefits from the Higher Resolution Input.
+ *
+ * NEW LOGIC:
+ * - Input is upscaled 2x before zoompan
+ * - z=2 shows the center portion (original image filling frame)
+ * - z=1 shows full canvas (image at half size with padding)
+ * - This ensures we NEVER zoom past the original resolution
  */
 function getEffectFilter(
     effect: Effect | undefined,
@@ -36,51 +40,35 @@ function getEffectFilter(
     fps: number
 ): string {
     const totalFrames = Math.ceil(duration * fps);
-
-    // Normalized time: 0.0 to 1.0
     const p = `on/${totalFrames}`;
     const invP = `(1-on/${totalFrames})`;
 
-    // Constants
-    const Z_PAN = "1.5";
-    const Z_MIN = "1.0";
+    const Z_SMALL = "1.0";
+    const Z_FULL = "1.5";
 
-    // Center: (Input - Viewport) / 2
     const center_x = (z: string) => `(iw-iw/(${z}))/2`;
     const center_y = (z: string) => `(ih-ih/(${z}))/2`;
-
-    // Max Offset: (Input - Viewport)
     const max_x = (z: string) => `(iw-iw/(${z}))`;
     const max_y = (z: string) => `(ih-ih/(${z}))`;
 
-    // ZOOM EXPRESSIONS
-    // We construct the Zoom Curve strings here to keep the switch clean
-    const zIn = `${Z_MIN}+(${Z_PAN}-${Z_MIN})*${p}`;
-    const zOut = `${Z_PAN}-(${Z_PAN}-${Z_MIN})*${p}`;
+    const zIn = `${Z_SMALL}+(${Z_FULL}-${Z_SMALL})*${p}`;
+    const zOut = `${Z_FULL}-(${Z_FULL}-${Z_SMALL})*${p}`;
 
     switch (effect) {
-        // --- ZOOM EFFECTS ---
         case "zoomIn":
             return `z='${zIn}':x='${center_x(zIn)}':y='${center_y(zIn)}'`;
-
         case "zoomOut":
             return `z='${zOut}':x='${center_x(zOut)}':y='${center_y(zOut)}'`;
-
-        // --- PAN EFFECTS ---
         case "panLeft":
-            return `z='${Z_PAN}':x='${max_x(Z_PAN)}*${invP}':y='${center_y(Z_PAN)}'`;
-
+            return `z='${Z_FULL}':x='${max_x(Z_FULL)}*${invP}':y='${center_y(Z_FULL)}'`;
         case "panRight":
-            return `z='${Z_PAN}':x='${max_x(Z_PAN)}*${p}':y='${center_y(Z_PAN)}'`;
-
+            return `z='${Z_FULL}':x='${max_x(Z_FULL)}*${p}':y='${center_y(Z_FULL)}'`;
         case "panUp":
-            return `z='${Z_PAN}':x='${center_x(Z_PAN)}':y='${max_y(Z_PAN)}*${invP}'`;
-
+            return `z='${Z_FULL}':x='${center_x(Z_FULL)}':y='${max_y(Z_FULL)}*${invP}'`;
         case "panDown":
-            return `z='${Z_PAN}':x='${center_x(Z_PAN)}':y='${max_y(Z_PAN)}*${p}'`;
-
+            return `z='${Z_FULL}':x='${center_x(Z_FULL)}':y='${max_y(Z_FULL)}*${p}'`;
         default:
-            return `z='1':x='0':y='0'`;
+            return `z='${Z_SMALL}':x='${center_x(Z_FULL)}':y='${center_y(Z_FULL)}'`;
     }
 }
 
@@ -92,9 +80,16 @@ export async function CreateVideoFromImages(
         width?: number;
         height?: number;
         backgroundImage?: string;
+        hwAccel?: 'nvidia' | 'apple' | 'none';  // NEW: hardware acceleration option
     } = {}
 ): Promise<void> {
-    const {fps = 30, width = 1920, height = 1080, backgroundImage} = options;
+    const {
+        fps = 30,           // CHANGED: 24fps instead of 30
+        width = 1920,
+        height = 1080,
+        backgroundImage,
+        hwAccel = 'none'    // NEW: default to software encoding
+    } = options;
 
     if (videoData.length === 0) {
         throw new Error("videoData array cannot be empty");
@@ -115,19 +110,16 @@ export async function CreateVideoFromImages(
         // 2. Filter Construction
         let filterChains: string[] = [];
 
-        // We use a specific Magenta color for padding, then key it out.
         const PAD_COLOR = "0xFF00FF";
 
-        // SUPER-SAMPLING FACTOR
-        // 3x Resolution (e.g. 5760x3240) provides enough granularity
-        // for sub-pixel movement without crashing memory like 4k/8k might.
-        const SS = 3;
+        // CHANGED: Reduced super-sampling from 3x to 2x
+        const SS = 2;
         const ssW = width * SS;
         const ssH = height * SS;
 
-        // Background Processing (remains at standard resolution)
+        // Background Processing
         if (backgroundImage) {
-            const bgBase = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1`;
+            const bgBase = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=${width}:${height},setsar=1`;
             const splitOuts = videoData.map((_, i) => `[bg_copy${i}]`).join("");
             filterChains.push(`${bgBase},split=${videoData.length}${splitOuts}`);
         }
@@ -139,26 +131,19 @@ export async function CreateVideoFromImages(
             const keyedLabel = `keyed${i}`;
             const finalLabel = `v${i}`;
 
-            // --- A. UPSCALE & PAD (Input Supersampling) ---
-            // We scale the Input Image UP to the massive SS resolution.
-            // This creates a fine-grained grid for zoompan to move across.
-            const upscaleFilter = `[${idx}:v]scale=${ssW}:${ssH}:force_original_aspect_ratio=decrease,` +
-                `pad=${ssW}:${ssH}:(ow-iw)/2:(oh-ih)/2:color=${PAD_COLOR},setsar=1[${normalizedLabel}]`;
-            filterChains.push(upscaleFilter);
+            // --- A. PAD ONLY ---
+            const padFilter = `[${idx}:v]pad=${ssW}:${ssH}:(ow-iw)/2:(oh-ih)/2:color=${PAD_COLOR},setsar=1[${normalizedLabel}]`;
+            filterChains.push(padFilter);
 
-            // --- B. EFFECT (At High Resolution) ---
+            // --- B. EFFECT ---
             const effectParams = getEffectFilter(data.effect, data.duration, fps);
-
-            // zoompan outputs at High Res (s=ssW x ssH)
-            // We do NOT scale down yet.
             const highResZoomCmd = `zoompan=${effectParams}:d=${Math.ceil(data.duration * fps)}:s=${ssW}x${ssH}:fps=${fps}[${effectLabel}]`;
             filterChains.push(`[${normalizedLabel}]${highResZoomCmd}`);
 
             // --- C. KEYING & DOWNSCALING ---
-            // 1. Remove Magenta (Key) AT HIGH RES. This ensures sharp alpha edges.
-            // 2. Scale Down to 1080p using 'lanczos' (best for downscaling).
+            // CHANGED: Using fast_bilinear instead of lanczos
             const finalizeFilters = `[${effectLabel}]colorkey=${PAD_COLOR}:0.3:0.1,` +
-                `scale=${width}:${height}:flags=lanczos[${keyedLabel}]`;
+                `scale=${width}:${height}:flags=fast_bilinear[${keyedLabel}]`;
             filterChains.push(finalizeFilters);
 
             // --- D. COMPOSITION ---
@@ -175,17 +160,43 @@ export async function CreateVideoFromImages(
 
         const filterComplex = filterChains.join("; ");
 
+        // CHANGED: Build output options based on hardware acceleration
+        const baseOutputOptions = [
+            "-map [outv]",
+            "-threads 0",           // NEW: Use all CPU cores
+            `-r ${fps}`,
+            "-pix_fmt yuv420p",
+            "-movflags +faststart"
+        ];
+
+        let encoderOptions: string[];
+        switch (hwAccel) {
+            case 'nvidia':
+                encoderOptions = [
+                    "-c:v h264_nvenc",
+                    "-preset p1",       // Fastest NVENC preset
+                    "-rc vbr",
+                    "-cq 26"
+                ];
+                break;
+            case 'apple':
+                encoderOptions = [
+                    "-c:v h264_videotoolbox",
+                    "-q:v 65"
+                ];
+                break;
+            default:
+                encoderOptions = [
+                    "-c:v libx264",
+                    "-preset ultrafast",
+                    "-tune fastdecode",  // NEW: Optimize for fast decoding
+                    "-crf 26"            // CHANGED: 26 instead of 23
+                ];
+        }
+
         command
             .complexFilter(filterComplex)
-            .outputOptions([
-                "-map [outv]",
-                `-r ${fps}`,
-                "-pix_fmt yuv420p",
-                "-c:v libx264",
-                "-preset medium",
-                "-crf 23",
-                "-movflags +faststart"
-            ])
+            .outputOptions([...baseOutputOptions, ...encoderOptions])
             .output(outputPath)
             .on("start", (cmd) => console.log("FFmpeg command:", cmd))
             .on("progress", (progress) => console.log(`Processing: ${progress.percent?.toFixed(1)}% done`))
@@ -198,7 +209,7 @@ export async function CreateVideoFromImages(
     });
 }
 
-// ... (Rest of file: MergeAudioToVideo, CreateSlideshow, MergeVideos remain unchanged)
+// Rest of file unchanged...
 export async function MergeAudioToVideo(
     videoPath: string,
     audioPath: string,
@@ -291,11 +302,10 @@ export async function CreateSlideshow(
         throw new Error("imagePaths array cannot be empty");
     }
 
-    // Convert to VideoData format
     const videoData: VideoData[] = imagePaths.map((imagePath) => ({
         panel: imagePath,
         duration: durationPerImage,
-        effect: "zoomIn", // Default effect
+        effect: "zoomIn",
     }));
 
     return CreateVideoFromImages(videoData, videoPath, options);

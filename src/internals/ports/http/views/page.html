@@ -3,810 +3,1243 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Absolute | Comic Audio Synthesis</title>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Space+Grotesk:wght@300;500;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-
+    <title>Midlife Engineering // Final Corrected</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/Draggable.min.js"></script>
     <style>
-        /* --- RESET & VARIABLES --- */
-        :root {
-            --bg-void: #030303;
-            --glass-surface: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --text-primary: #ffffff;
-            --text-secondary: #888888;
-            --accent-active: #fff;
-            --ease-elastic: cubic-bezier(0.19, 1, 0.22, 1);
+        @font-face {
+            font-family: 'PP Neue Montreal';
+            src: url('https://proxy.extractcss.dev/https://framerusercontent.com/assets/6uIfYl8bnz9kOy3KOuV7PxhFPhA.woff2');
+            font-weight: 500;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+        @font-face {
+            font-family: 'Exat Wide';
+            src: url('https://proxy.extractcss.dev/https://8403b5d6.delivery.rocketcdn.me/wp-content/themes/exat-hot-type/src/fonts/exat/03-25-release/ExatCYRWide-Black.woff2');
+            font-weight: 900;
+        }
+
+        :root {
+            --bg-color: #050505;
+            --panel-bg: #0f0f0f;
+            --border-color: #2a2a2a;
+            --radius-lg: 24px;
+            --radius-sm: 8px;
+            --font-main: 'PP Neue Montreal', sans-serif;
+            --font-display: 'Exat Wide', sans-serif;
+            --sidebar-width: 420px;
+            --node-width: 320px;
+        }
+
+        @media (min-width: 1600px) {
+            :root {
+                --sidebar-width: 600px;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #050505;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #333 #050505;
+        }
 
         body {
-            background-color: var(--bg-void);
-            color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: white;
+            font-family: var(--font-main);
+            margin: 0;
             height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            height: 100%;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            position: absolute;
+            top: 0;
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+        }
+
+        #left-panel {
+            left: 0;
+            border-width: 0 1px 0 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #left-panel-controls {
+            padding: 2rem;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+        }
+
+        #right-panel {
+            right: 0;
+            border-width: 0 0 0 1px;
+            transform: translateX(100%);
+            background: rgba(10, 10, 10, 0.98);
+        }
+
+        #right-panel.active {
+            transform: translateX(0);
+        }
+
+        h1, h2 {
+            font-family: var(--font-display);
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #666;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .input-box {
+            background: #000;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            color: white;
+            font-family: inherit;
+            width: 100%;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .input-box:focus {
+            border-color: white;
+        }
+
+        .input-box:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #222;
+            color: #666;
+        }
+
+        #drop-zone {
+            border: 1px dashed #333;
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            text-align: center;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        #drop-zone.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #222;
+            pointer-events: none;
+        }
+
+        .custom-select {
+            position: relative;
+            width: 100%;
+        }
+
+        .select-trigger {
+            background: #000;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: 0.3s;
+        }
+
+        .select-trigger:hover {
+            border-color: #666;
+        }
+
+        .select-trigger.active {
+            border-color: white;
+        }
+
+        .select-trigger.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #222;
+        }
+
+        .select-options {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            width: 100%;
+            background: #0a0a0a;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            max-height: 0;
+            overflow-y: auto;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 2000;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        .custom-select.open .select-options {
+            max-height: 300px;
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .select-option {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid #1a1a1a;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .select-option:hover {
+            background: #fff;
+            color: #000;
+        }
+
+        .select-option:last-child {
+            border-bottom: none;
+        }
+
+        .select-option.selected {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .opt-meta {
+            font-size: 0.7rem;
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .select-option:hover .opt-meta {
+            opacity: 1;
+            color: #000;
+        }
+
+        .btn-main {
+            background: white;
+            color: black;
+            font-family: var(--font-display);
+            text-transform: uppercase;
+            padding: 1rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 1rem;
+            width: 100%;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .btn-main.terminate {
+            background: #222;
+            color: #ff4444;
+            border: 1px solid #ff4444;
+        }
+
+        .btn-main.terminate:hover {
+            background: #ff4444;
+            color: #000;
+        }
+
+        #viewport {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background-image: radial-gradient(#222 1px, transparent 1px);
+            background-size: 40px 40px;
+            overflow: hidden;
+            padding-left: var(--sidebar-width);
+        }
+
+        #world {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-origin: 0 0;
+            will-change: transform;
+        }
+
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .edge {
+            fill: none;
+            stroke: #333;
+            stroke-width: 2px;
+            stroke-linecap: round;
+            transition: stroke 0.3s;
+        }
+
+        .edge.active {
+            stroke: #fff;
+            stroke-dasharray: 8;
+            animation: flow 1s linear infinite;
+        }
+
+        @keyframes flow {
+            to {
+                stroke-dashoffset: -16;
+            }
+        }
+
+        .edge.completed {
+            stroke: #fff !important;
+            stroke-width: 4px !important;
+            stroke-dasharray: none !important;
+        }
+
+        .node {
+            position: absolute;
+            width: var(--node-width);
+            background: #000;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 0;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .node-header {
+            padding: 1rem;
+            background: #111;
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 22px 22px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .node-title {
+            font-family: var(--font-display);
+            font-size: 0.8rem;
+        }
+
+        .status-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #333;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
-            position: relative;
+            font-size: 10px;
+            color: black;
+            font-weight: bold;
         }
 
-        /* --- ATMOSPHERE --- */
-        .ambient-noise {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0MDAnIGhlaWdodD0nNDAwJz48ZmlsdGVyIGlkPSdub2lzZUZpbHRlcic+PHZlVHVyYnVsZW5jZSB0eXBlPSdmcmFjdGFsTm9pc2UnIGJhc2VGcmVxdWVuY3k9JzAuNjUnIG51bU9jdGF2ZXM9JzMnIHN0aXRjaFRpbGVzPSdzdGl0Y2gnLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0nMTAwJScgaGVpZ2h0PScxMDAlJyBmaWx0ZXI9J3VybCgjbm9pc2VGaWx0ZXIpJyBvcGFjaXR5PScwLjAzJy8+PC9zdmc+');
-            pointer-events: none; z-index: 2;
+        .node-body {
+            padding: 1.2rem;
+            font-size: 0.85rem;
+            color: #888;
+            min-height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
-        .ambient-light {
-            position: fixed; width: 800px; height: 800px;
-            background: radial-gradient(circle, rgba(60,60,70,0.15) 0%, rgba(0,0,0,0) 70%);
-            top: 50%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 1; animation: breathe 10s infinite alternate ease-in-out;
-        }
-
-        /* --- MONOLITH (MAIN CARD) --- */
-        .monolith {
-            position: relative; z-index: 10;
-            width: 500px;
-            padding: 40px;
-            background: var(--glass-surface);
-            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            box-shadow: 0 20px 80px -10px rgba(0,0,0,0.5);
-            display: flex; flex-direction: column; gap: 20px;
-            transition: all 0.6s var(--ease-elastic);
-            overflow: visible;
-        }
-
-        .monolith::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); opacity: 0.5;
-        }
-
-        /* --- HEADER --- */
-        .header { display: flex; justify-content: space-between; align-items: center; }
-        .brand {
-            font-family: 'Space Grotesk', sans-serif; font-weight: 700;
-            font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-primary);
-        }
-        .status-dot { width: 8px; height: 8px; background: #333; border-radius: 50%; transition: all 0.3s; }
-        .status-dot.active { background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.8); }
-        .status-dot.error { background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
-
-        /* --- CONFIG FORM --- */
-        .config-area {
-            display: flex; flex-direction: column; gap: 8px;
-            overflow: visible;
-            position: relative;
-        }
-
-        .input-group {
-            position: relative;
-            z-index: 50;
-        }
-
-        .input-label {
-            font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-            color: var(--text-secondary); margin-bottom: 6px; display: block;
-        }
-
-        /* Custom Select */
-        .custom-select-wrapper { position: relative; user-select: none; width: 100%; z-index: 100; }
-        .custom-select-trigger {
-            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-            color: #fff; padding: 12px 16px; border-radius: 12px; font-size: 13px;
-            display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.3s;
-        }
-        .custom-select-trigger:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); }
-        .custom-select-trigger::after { content: '▼'; font-size: 8px; opacity: 0.5; transition: transform 0.2s; }
-        .custom-select-wrapper.open .custom-select-trigger::after { transform: rotate(180deg); }
-        .custom-options {
-            position: absolute; top: calc(100% + 8px); left: 0; right: 0;
-            background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto;
-            opacity: 0; visibility: hidden; transform: translateY(-10px);
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1000;
+        .view-btn {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: #222;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #fff;
+            opacity: 0;
             pointer-events: none;
+            transition: opacity 0.3s;
         }
-        .custom-select-wrapper.open .custom-options {
+
+        .node.active {
+            border-color: white;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.15);
+        }
+
+        .node.active .status-dot {
+            background: white;
+            box-shadow: 0 0 10px white;
+            animation: pulse 1s infinite;
+        }
+
+        .node.completed {
+            border-color: #666;
             opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-            pointer-events: auto;
-        }
-        .custom-option { padding: 10px 16px; font-size: 13px; color: #aaa; cursor: pointer; transition: 0.2s; }
-        .custom-option:hover { background: rgba(255,255,255,0.05); color: #fff; }
-        .custom-option.selected { background: rgba(255,255,255,0.1); color: #fff; }
-        .custom-options::-webkit-scrollbar { width: 4px; }
-        .custom-options::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-
-        textarea {
-            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff;
-            padding: 12px; border-radius: 12px; font-family: 'Inter', sans-serif; font-size: 13px;
-            transition: all 0.3s; resize: none;
-        }
-        textarea:focus { border-color: rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); }
-
-        .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .toggle-checkbox { display: none; }
-        .toggle-switch {
-            width: 32px; height: 18px; background: rgba(255,255,255,0.1); border-radius: 20px; position: relative; transition: 0.3s;
-        }
-        .toggle-switch::after {
-            content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; background: #888; border-radius: 50%; transition: 0.3s;
-        }
-        .toggle-checkbox:checked + .toggle-switch { background: rgba(255,255,255,0.2); }
-        .toggle-checkbox:checked + .toggle-switch::after { transform: translateX(14px); background: #fff; }
-        .toggle-label { font-size: 13px; color: var(--text-primary); }
-
-        #directorInput { height: 0; overflow: hidden; opacity: 0; transition: all 0.4s ease; margin-top: 0; }
-        #directorInput.visible { height: 80px; opacity: 1; margin-top: 10px; }
-        #contextInput { height: 0; overflow: hidden; opacity: 0; transition: all 0.4s ease; margin-top: 0; }
-        #contextInput.visible { height: 80px; opacity: 1; margin-top: 10px; }
-
-        /* --- UPLOAD STATE --- */
-        .state-upload { transition: opacity 0.4s; overflow: visible; }
-        .drop-target {
-            height: 140px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: all 0.3s ease; cursor: pointer; margin-top: 10px;
-        }
-        .drop-target:hover, .drop-target.drag-over { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.02); }
-        .upload-icon { font-size: 20px; margin-bottom: 10px; opacity: 0.7; }
-        .cta-text { font-size: 12px; color: var(--text-secondary); pointer-events: none; }
-
-        /* --- PROCESSING STATE --- */
-        .state-process { display: none; flex-direction: column; }
-        .main-status {
-            font-family: 'Space Grotesk', sans-serif; font-size: 28px; line-height: 1.1; font-weight: 300;
-            margin-bottom: 10px; background: linear-gradient(180deg, #fff, #888);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
 
-        /* Meta Log & History Controls */
-        .log-controls {
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
-        }
-        .meta-log {
-            font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text-secondary);
-            height: 20px; overflow: hidden; display: flex; align-items: center; gap: 8px;
+        .node.completed .status-dot {
+            background: white;
+            content: "✓";
         }
 
-        .btn-history-toggle {
-            background: transparent; border: none; color: #555;
-            font-family: 'Space Grotesk'; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
-            cursor: pointer; transition: 0.2s;
-        }
-        .btn-history-toggle:hover { color: #fff; }
-
-        /* The Hidden Log Drawer */
-        .log-history {
-            height: 0; overflow-y: auto; overflow-x: hidden;
-            background: rgba(0,0,0,0.3); border-radius: 8px;
-            font-family: 'Courier Prime', monospace; font-size: 11px; color: #888;
-            transition: height 0.4s var(--ease-elastic), margin-bottom 0.4s;
-            margin-bottom: 0;
-            border: 1px solid transparent;
+        .node.inspectable.completed {
+            border-color: white;
+            cursor: pointer;
         }
 
-        .log-history.visible {
-            height: 120px; margin-bottom: 20px; border-color: rgba(255,255,255,0.05);
+        .node.inspectable.completed .view-btn {
+            opacity: 1;
         }
 
-        .history-item {
-            padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.02);
-            display: flex; gap: 10px; animation: slideInLeft 0.3s forwards;
-        }
-        .history-time { color: #444; min-width: 60px; }
-        .history-msg { color: #aaa; }
-
-        .log-history::-webkit-scrollbar { width: 4px; }
-        .log-history::-webkit-scrollbar-track { background: transparent; }
-        .log-history::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-
-        /* Progress & Artifacts */
-        .progress-container {
-            width: 100%; height: 2px; background: rgba(255,255,255,0.1);
-            position: relative; overflow: hidden; border-radius: 2px; margin-top: 20px;
-        }
-        .progress-bar {
-            position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
-            background: #fff; box-shadow: 0 0 15px rgba(255,255,255,0.5);
-            transition: width 0.5s ease-out;
-        }
-        .artifacts {
-            display: flex; gap: 12px; margin-top: 20px;
-            opacity: 0; transform: translateY(10px); transition: all 0.6s ease;
-        }
-        .artifacts.visible { opacity: 1; transform: translateY(0); }
-        .chip {
-            padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 100px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
-            color: #555; transition: all 0.4s; display: flex; align-items: center; gap: 6px;
-        }
-        .chip.active { color: #fff; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); }
-        .chip.interactive { cursor: pointer; box-shadow: 0 0 10px rgba(255,255,255,0.1); }
-        .chip.interactive:hover { background: rgba(255,255,255,0.2); transform: translateY(-1px); }
-        .chip-dot { width: 4px; height: 4px; background: currentColor; border-radius: 50%; }
-
-        .btn-cancel {
-            padding: 10px 24px; background: transparent;
-            border: 1px solid rgba(255,255,255,0.15); color: #666;
-            border-radius: 30px; font-family: 'Space Grotesk', sans-serif;
-            text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em;
-            cursor: pointer; transition: all 0.3s;
-        }
-        .btn-cancel:hover { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.1); }
-
-        .main-wrapper {
-            display: flex; flex-direction: column; align-items: center; gap: 20px;
-            position: relative; z-index: 10;
+        @keyframes pulse {
+            0% {
+                opacity: 0.5;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0.5;
+            }
         }
 
-        /* --- SCRIPT MODAL --- */
-        .script-modal-backdrop {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 100;
-            display: none; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease;
+        #inspector-content {
+            padding: 2rem;
+            height: calc(100% - 60px);
+            overflow-y: auto;
+            scroll-behavior: smooth;
         }
-        .script-modal-backdrop.active { display: flex; opacity: 1; }
-        .script-modal {
-            width: 90%; max-width: 600px; height: 80vh; background: #0e0e0e;
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); display: flex; flex-direction: column;
-            transform: scale(0.95); transition: transform 0.3s ease;
-        }
-        .script-modal-backdrop.active .script-modal { transform: scale(1); }
-        .modal-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
-        .modal-title { font-family: 'Space Grotesk'; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: #fff; }
-        .btn-close-modal { background: transparent; border: none; color: #666; cursor: pointer; font-size: 18px; transition: 0.2s; }
-        .btn-close-modal:hover { color: #fff; }
-        .script-content {
-            flex: 1; padding: 30px; overflow-y: auto; font-family: 'Courier Prime', monospace;
-            font-size: 14px; line-height: 1.6; color: #d4d4d8; white-space: pre-wrap;
-        }
-        .script-content::-webkit-scrollbar { width: 6px; }
-        .script-content::-webkit-scrollbar-track { background: #0e0e0e; }
-        .script-content::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-        /* --- VIDEO RESULT --- */
-        .video-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 20; opacity: 0; pointer-events: none;
-            transition: opacity 1s ease; display: flex; flex-direction: column;
-            border-radius: 24px; overflow: hidden;
+        .script-page {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: var(--radius-sm);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
         }
-        .video-overlay.active { opacity: 1; pointer-events: all; }
-        video { width: 100%; flex: 1; object-fit: contain; background: #000; }
-        .result-controls {
-            padding: 20px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 15px; background: #050505;
-        }
-        .btn-view-script {
-            background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 10px 24px;
-            border-radius: 30px; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase;
-            font-size: 12px; letter-spacing: 0.1em; cursor: pointer; transition: 0.3s;
-        }
-        .btn-view-script:hover { background: rgba(255,255,255,0.1); }
-        .btn-reset {
-            background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 10px 24px;
-            border-radius: 30px; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase;
-            font-size: 12px; letter-spacing: 0.1em; cursor: pointer; transition: 0.3s;
-        }
-        .btn-reset:hover { background: #fff; color: #000; }
 
-        .hidden { display: none !important; }
-        @keyframes breathe { 0% { opacity: 0.3; transform: translate(-50%, -50%) scale(0.9); } 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); } }
-        @keyframes slideInLeft { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+        .page-header {
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            color: #fff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 0.8rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .panel-row {
+            display: grid;
+            grid-template-columns: 40px 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-left: 2px solid #333;
+            padding-left: 1rem;
+        }
+
+        .panel-num {
+            font-family: var(--font-display);
+            font-size: 0.8rem;
+            color: #666;
+            padding-top: 4px;
+        }
+
+        .panel-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-width: 0;
+        }
+
+        .panel-script {
+            font-family: 'Courier Prime', monospace;
+            font-size: 0.9rem;
+            color: #ccc;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .panel-effect {
+            align-self: flex-start;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #000;
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .close-inspector {
+            cursor: pointer;
+            color: #666;
+            transition: color 0.3s;
+        }
+
+        .close-inspector:hover {
+            color: white;
+        }
+
+        .port {
+            width: 12px;
+            height: 12px;
+            background: #000;
+            border: 2px solid #444;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .port.in {
+            left: -6px;
+        }
+
+        .port.out {
+            right: -6px;
+        }
+
+        #controls-hint {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 500;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            color: #666;
+            pointer-events: none;
+            text-align: right;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Console Styles */
+        #console-section {
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 280px;
+            flex-shrink: 0;
+        }
+
+        #console-header {
+            font-family: var(--font-display);
+            font-size: 0.8rem;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0a0a0a;
+        }
+
+        #console-header span:first-child {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #console-header .console-dot {
+            width: 8px;
+            height: 8px;
+            background: #333;
+            border-radius: 50%;
+        }
+
+        #console-header .console-dot.active {
+            background: #4ade80;
+            box-shadow: 0 0 8px #4ade80;
+        }
+
+        #clear-console {
+            cursor: pointer;
+            color: #666;
+            font-size: 0.7rem;
+            transition: color 0.3s;
+        }
+
+        #clear-console:hover {
+            color: white;
+        }
+
+        #console-log {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            background: #000;
+        }
+
+        .log-entry {
+            padding: 6px 0;
+            border-bottom: 1px solid #1a1a1a;
+            display: flex;
+            gap: 12px;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .log-time {
+            color: #666;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .log-event {
+            color: #888;
+            text-transform: uppercase;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            background: #1a1a1a;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .log-event.update {
+            background: #1a3a1a;
+            color: #4ade80;
+        }
+
+        .log-event.script {
+            background: #3a1a3a;
+            color: #c084fc;
+        }
+
+        .log-event.split {
+            background: #1a2a3a;
+            color: #60a5fa;
+        }
+
+        .log-event.error {
+            background: #3a1a1a;
+            color: #f87171;
+        }
+
+        .log-message {
+            color: #ccc;
+            word-break: break-word;
+        }
+
+        .empty-console {
+            color: #444;
+            text-align: center;
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        /* Screen Block Overlay */
+        #screen-block {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .screen-block-content {
+            max-width: 400px;
+        }
+
+        .screen-block-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.6;
+        }
+
+        #screen-block h1 {
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            letter-spacing: 0.05em;
+        }
+
+        #screen-block p {
+            color: #888;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin: 0 0 1rem 0;
+        }
+
+        .screen-block-hint {
+            font-size: 0.75rem !important;
+            color: #555 !important;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem !important;
+            margin-top: 1.5rem !important;
+        }
+
+        @media (max-width: 1023px) {
+            #screen-block {
+                display: flex;
+            }
+
+            .sidebar, #viewport, #controls-hint {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
 
-<div class="ambient-noise"></div>
-<div class="ambient-light"></div>
-
-<div class="script-modal-backdrop" id="scriptModalBackdrop">
-    <div class="script-modal">
-        <div class="modal-header">
-            <span class="modal-title">Generated Screenplay</span>
-            <button class="btn-close-modal" id="btnCloseModal">✕</button>
-        </div>
-        <div class="script-content" id="scriptContentArea"></div>
+<div id="screen-block">
+    <div class="screen-block-content">
+        <div class="screen-block-icon">⚠</div>
+        <h1>Larger Screen Required</h1>
+        <p>This application requires a minimum screen width of 1024px for optimal experience.</p>
+        <p class="screen-block-hint">Please use a desktop or laptop computer, or rotate your device to landscape
+            mode.</p>
     </div>
 </div>
 
-<div class="main-wrapper">
-    <div class="monolith">
-        <div class="header">
-            <div class="brand">Absolute</div>
-            <div class="status-dot" id="statusDot"></div>
-        </div>
-
-        <div id="viewUpload" class="state-upload">
-            <div class="config-area">
-                <div class="input-group" style="margin-bottom: 20px">
-                    <label class="input-label">Voice Model</label>
-                    <div class="custom-select-wrapper" id="customSelect">
-                        <div class="custom-select-trigger" id="selectTrigger"><span>Select Voice</span></div>
-                        <div class="custom-options" id="customOptions"></div>
-                        <input type="hidden" id="voiceSelectInput" value="Gacrux">
-                    </div>
-                </div>
-                <div class="input-group" style="z-index: 1;">
-                    <label class="toggle-row">
-                        <input type="checkbox" class="toggle-checkbox" id="directorToggle">
-                        <div class="toggle-switch"></div>
-                        <span class="toggle-label">Director Mode</span>
-                    </label>
-                    <textarea id="directorInput" placeholder="Enter voice style instructions..."></textarea>
-                </div>
-                <div class="input-group" style="z-index: 1;">
-                    <label class="toggle-row">
-                        <input type="checkbox" class="toggle-checkbox" id="contextToggle">
-                        <div class="toggle-switch"></div>
-                        <span class="toggle-label">Context</span>
-                    </label>
-                    <textarea id="contextInput" placeholder="Enter additional context about the comic..."></textarea>
-                </div>
-            </div>
-            <input type="file" id="fileInput" accept=".cbr,.cb7,.cbz" hidden>
-            <div class="drop-target" id="dropTarget">
-                <div class="upload-icon">⊕</div>
-                <div class="cta-text">Drag Comic File to Begin</div>
+<div id="left-panel" class="sidebar">
+    <div id="left-panel-controls">
+        <h1>Absolute</h1>
+        <div style="margin-top: 2rem;">
+            <span class="label">01 // Source File</span>
+            <div id="drop-zone">
+                <span id="file-name">Click to Upload .CBR</span>
+                <input type="file" id="file-input" hidden accept=".cbr,.cbz">
             </div>
         </div>
-
-        <div class="state-process" id="viewProcess">
-            <div class="main-status" id="mainStatus">Initializing</div>
-
-            <div class="log-controls">
-                <div class="meta-log" id="metaLog"><span>Ready...</span></div>
-                <button class="btn-history-toggle" id="btnHistoryToggle">Show History</button>
-            </div>
-
-            <div class="log-history" id="logHistory">
-            </div>
-
-            <div class="progress-container">
-                <div class="progress-bar" id="progressBar"></div>
-            </div>
-
-            <div class="artifacts" id="artifactRow">
-                <div class="chip" id="chipScript">
-                    <div class="chip-dot"></div> Script <span style="margin-left:5px; opacity:0.5; font-size:9px;">(View)</span>
+        <div style="margin-top: 1.5rem;">
+            <span class="label">02 // Voice Model</span>
+            <div class="custom-select" id="voice-component">
+                <div class="select-trigger" id="voice-trigger">
+                    <span id="voice-display">Select Voice...</span>
+                    <span>▼</span>
                 </div>
-                <div class="chip" id="chipAudio"><div class="chip-dot"></div> Splits</div>
-                <div class="chip" id="chipVideo"><div class="chip-dot"></div> Video</div>
+                <div class="select-options" id="voice-options"></div>
             </div>
         </div>
-
-        <div class="video-overlay" id="viewResult">
-            <video id="finalVideo" controls><source src="" type="video/mp4"></video>
-            <div class="result-controls">
-                <button class="btn-view-script" id="btnViewScript">View Script</button>
-                <button class="btn-reset" id="btnReset">Create New Experience</button>
-            </div>
+        <div style="margin-top: 1.5rem;">
+            <span class="label">03 // Direction</span>
+            <textarea id="style-input" class="input-box">Classic noir voiceover: dry, world-weary delivery.</textarea>
+        </div>
+        <div style="margin-top: 1.5rem;">
+            <span class="label">04 // Context</span>
+            <textarea id="context-input" class="input-box" style="min-height:80px;"></textarea>
+        </div>
+        <button id="run-btn" class="btn-main">Initiate Protocol</button>
+    </div>
+    <div id="console-section">
+        <div id="console-header">
+            <span><span class="console-dot" id="console-dot"></span>EVENT LOG</span>
+            <span id="clear-console" onclick="clearConsole()">CLEAR</span>
+        </div>
+        <div id="console-log">
+            <div class="empty-console">Waiting for events...</div>
         </div>
     </div>
+</div>
 
-    <button class="btn-cancel hidden" id="btnCancel">Cancel</button>
+<div id="viewport">
+    <div id="world">
+        <svg id="svg-layer"></svg>
+        <div id="nodes-layer"></div>
+    </div>
+    <div id="controls-hint">Wheel: SCROLL VERTICAL<br>Shift + Wheel: SCROLL HORIZONTAL<br>Ctrl + Wheel: ZOOM TO CURSOR
+    </div>
+</div>
+
+<div id="right-panel" class="sidebar">
+    <h2>
+        <span id="inspector-title">INSPECTOR</span>
+        <span class="close-inspector" onclick="toggleInspector(false)">✕</span>
+    </h2>
+    <div id="inspector-content"></div>
 </div>
 
 <script>
-    // --- DATA ---
-    const voices = [
-        "Gacrux", "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus",
-        "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel",
-        "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia",
-        "Achernar", "Alnilam", "Schedar", "Pulcherrima", "Achird",
-        "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
+    const state = {zoom: 1, x: 0, y: 0, nodes: {}, isRunning: false};
+    let abortController = null;
+    let selectedVoice = "Gacrux";
+    let eventIndex = 0;
+
+    const INSPECTABLE_IDS = ['script', 'split', 'video'];
+    const NODE_W = 320;
+
+    const nodeConfig = [
+        {id: 'upload', label: 'Upload', x: 50, y: 100},
+        {id: 'extract', label: 'Extract', x: 500, y: 100},
+        {id: 'script', label: 'Script', x: 950, y: 100},
+        {id: 'split', label: 'Splits', x: 500, y: 400},
+        {id: 'speech', label: 'Speech', x: 950, y: 400},
+        {id: 'video', label: 'Video', x: 1400, y: 250}
     ];
 
-    // --- DOM REFERENCES ---
-    const dropTarget = document.getElementById('dropTarget');
-    const fileInput = document.getElementById('fileInput');
-    const voiceSelectInput = document.getElementById('voiceSelectInput');
-    const directorToggle = document.getElementById('directorToggle');
-    const directorInput = document.getElementById('directorInput');
-    const contextToggle = document.getElementById('contextToggle');
-    const contextInput = document.getElementById('contextInput');
+    const connections = [
+        ['upload', 'extract'], ['extract', 'script'],
+        ['script', 'split'], ['split', 'speech'], ['speech', 'video']
+    ];
 
-    const viewUpload = document.getElementById('viewUpload');
-    const viewProcess = document.getElementById('viewProcess');
-    const viewResult = document.getElementById('viewResult');
-    const statusDot = document.getElementById('statusDot');
-    const metaLogEl = document.getElementById('metaLog');
-    const logHistoryEl = document.getElementById('logHistory');
-    const btnHistoryToggle = document.getElementById('btnHistoryToggle');
-    const progressBar = document.getElementById('progressBar');
-    const btnReset = document.getElementById('btnReset');
-    const finalVideo = document.getElementById('finalVideo');
-    const btnViewScript = document.getElementById('btnViewScript');
+    const viewport = document.getElementById('viewport');
+    const world = document.getElementById('world');
+    const svg = document.getElementById('svg-layer');
+    const nodesLayer = document.getElementById('nodes-layer');
+    const nodeEls = {};
 
-    const modalBackdrop = document.getElementById('scriptModalBackdrop');
-    const btnCloseModal = document.getElementById('btnCloseModal');
-    const scriptContentArea = document.getElementById('scriptContentArea');
-    const chipScript = document.getElementById('chipScript');
+    // Console functions
+    function logEvent(eventType, message) {
+        const consoleLog = document.getElementById('console-log');
+        const emptyMsg = consoleLog.querySelector('.empty-console');
+        if (emptyMsg) emptyMsg.remove();
 
-    const customSelect = document.getElementById('customSelect');
-    const selectTrigger = document.getElementById('selectTrigger');
-    const customOptions = document.getElementById('customOptions');
-    const btnCancel = document.getElementById('btnCancel');
+        const now = new Date();
+        const time = now.toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        const ms = String(now.getMilliseconds()).padStart(3, '0');
 
-    let generatedScriptText = null;
-    let abortController = null;
-    let jobCompleted = false;
+        eventIndex++;
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = `
+        <span class="log-time">${time}.${ms}</span>
+        <span class="log-event ${eventType}">${eventType}</span>
+        <span class="log-message">${message}</span>
+    `;
+        consoleLog.appendChild(entry);
+        consoleLog.scrollTop = consoleLog.scrollHeight;
 
-    // --- INIT ---
-    function initCustomSelect() {
-        const sortedVoices = [...voices].sort();
-        sortedVoices.forEach(v => {
-            const opt = document.createElement('div');
-            opt.className = 'custom-option';
-            opt.textContent = v;
-            if(v === 'Gacrux') {
-                opt.classList.add('selected');
-                selectTrigger.querySelector('span').textContent = v;
-                voiceSelectInput.value = v;
+        document.getElementById('console-dot').classList.add('active');
+        setTimeout(() => document.getElementById('console-dot').classList.remove('active'), 200);
+    }
+
+    function clearConsole() {
+        const consoleLog = document.getElementById('console-log');
+        consoleLog.innerHTML = '<div class="empty-console">Waiting for events...</div>';
+        eventIndex = 0;
+    }
+
+    nodeConfig.forEach(n => {
+        const el = document.createElement('div');
+        const isInspectable = INSPECTABLE_IDS.includes(n.id);
+        el.className = `node ${isInspectable ? 'inspectable' : ''}`;
+        el.id = n.id;
+        el.innerHTML = `
+        <div class="port in"></div>
+        <div class="node-header"><span class="node-title">${n.label}</span><div class="status-dot"></div></div>
+        <div class="node-body"><span id="msg-${n.id}">Idle</span>${isInspectable ? '<span class="view-btn">VIEW DATA</span>' : ''}</div>
+        <div class="port out"></div>
+    `;
+        el.addEventListener('click', () => {
+            if (isInspectable && el.classList.contains('completed')) openInspector(n.id);
+        });
+        nodesLayer.appendChild(el);
+        nodeEls[n.id] = el;
+        gsap.set(el, {x: n.x, y: n.y});
+        Draggable.create(el, {
+            type: "x,y",
+            onDragStart: function () {
+                this.target.classList.add('drag-active');
+            },
+            onDrag: updateEdges, onThrowUpdate: updateEdges,
+            onDragEnd: function () {
+                setTimeout(() => this.target.classList.remove('drag-active'), 100);
             }
-            opt.addEventListener('click', (e) => {
-                e.stopPropagation();
-                selectTrigger.querySelector('span').textContent = v;
-                customOptions.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                voiceSelectInput.value = v;
-                customSelect.classList.remove('open');
+        });
+    });
+
+    const edgeEls = [];
+    connections.forEach((c, i) => {
+        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        p.classList.add('edge');
+        p.id = `edge-${i}`;
+        svg.appendChild(p);
+        edgeEls.push({path: p, from: c[0], to: c[1]});
+    });
+
+    function updateWorldTransform() {
+        gsap.set(world, {x: state.x, y: state.y, scale: state.zoom});
+    }
+
+    updateWorldTransform();
+
+    viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (e.ctrlKey) {
+            const zoomSpeed = 0.001;
+            const rect = viewport.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const worldXBefore = (mouseX - state.x) / state.zoom;
+            const worldYBefore = (mouseY - state.y) / state.zoom;
+            state.zoom = Math.max(0.2, Math.min(state.zoom - (e.deltaY * zoomSpeed), 4));
+            state.x = mouseX - (worldXBefore * state.zoom);
+            state.y = mouseY - (worldYBefore * state.zoom);
+        } else {
+            const panSpeed = 1;
+            if (e.shiftKey) state.x -= e.deltaY * panSpeed;
+            else state.y -= e.deltaY * panSpeed;
+        }
+        updateWorldTransform();
+    }, {passive: false});
+
+    function updateEdges() {
+        edgeEls.forEach(e => {
+            const f = nodeEls[e.from], t = nodeEls[e.to];
+            const fx = gsap.getProperty(f, "x"), fy = gsap.getProperty(f, "y");
+            const tx = gsap.getProperty(t, "x"), ty = gsap.getProperty(t, "y");
+            const startX = fx + NODE_W, startY = fy + 60;
+            const endX = tx, endY = ty + 60;
+            const dist = Math.abs(endX - startX) * 0.5;
+            e.path.setAttribute('d', `M ${startX} ${startY} C ${startX + dist} ${startY}, ${endX - dist} ${endY}, ${endX} ${endY}`);
+        });
+    }
+
+    updateEdges();
+
+    function centerNodesOnLoad() {
+        const sidebarWidth = window.innerWidth >= 1600 ? 600 : 420;
+        const xs = nodeConfig.map(n => n.x);
+        const ys = nodeConfig.map(n => n.y);
+        const minX = Math.min(...xs);
+        const maxY = Math.max(...ys);
+        const minY = Math.min(...ys);
+        const nodeHeight = 130;
+        const nodesVerticalCenter = (minY + maxY + nodeHeight) / 2;
+        state.x = sidebarWidth + 24 - minX;
+        state.y = (window.innerHeight / 2) - nodesVerticalCenter;
+        updateWorldTransform();
+    }
+
+    centerNodesOnLoad();
+    window.addEventListener('resize', centerNodesOnLoad);
+
+    function toggleInspector(show) {
+        document.getElementById('right-panel').classList.toggle('active', show);
+    }
+
+    function openInspector(nodeId) {
+        const data = state.nodes[nodeId];
+        const container = document.getElementById('inspector-content');
+        document.getElementById('inspector-title').innerText = `${nodeId.toUpperCase()} OUTPUT`;
+        container.innerHTML = '';
+        if (!data) {
+            container.innerHTML = '<div class="empty-state">NO DATA</div>';
+            toggleInspector(true);
+            return;
+        }
+        if (Array.isArray(data) && data[0]?.panels) {
+            data.forEach(g => {
+                let ph = '';
+                g.panels.forEach(p => {
+                    ph += `<div class="panel-row"><div class="panel-num">${p.panel}</div><div class="panel-content"><div class="panel-script">${p.script}</div>${p.effect ? `<div class="panel-effect">${p.effect.type || 'FX'}</div>` : ''}</div></div>`;
+                });
+                const d = document.createElement('div');
+                d.className = 'script-page';
+                d.innerHTML = `<div class="page-header"><span>PAGE ${g.page}</span><span>${g.panels.length} PNL</span></div>${ph}`;
+                container.appendChild(d);
             });
-            customOptions.appendChild(opt);
-        });
+        } else if (nodeId === 'video') {
+            const v = document.createElement('video');
+            v.src = data;
+            v.controls = true;
+            v.style.cssText = 'width:100%; border:1px solid #333';
+            container.appendChild(v);
+        } else {
+            const p = document.createElement('pre');
+            p.innerText = JSON.stringify(data, null, 2);
+            p.style.color = '#888';
+            container.appendChild(p);
+        }
+        toggleInspector(true);
+    }
 
-        selectTrigger.addEventListener('click', (e) => {
+    const rawVoices = [
+        {name: "Achernar", gender: "Female", desc: "Soft"}, {name: "Achird", gender: "Male", desc: "Friendly"},
+        {name: "Algenib", gender: "Male", desc: "Gravelly"}, {name: "Algieba", gender: "Male", desc: "Smooth"},
+        {name: "Alnilam", gender: "Male", desc: "Firm"}, {name: "Aoede", gender: "Female", desc: "Breezy"},
+        {name: "Autonoe", gender: "Female", desc: "Bright"}, {name: "Callirrhoe", gender: "Female", desc: "Easy-going"},
+        {name: "Charon", gender: "Male", desc: "Informative"}, {name: "Despina", gender: "Female", desc: "Smooth"},
+        {name: "Enceladus", gender: "Male", desc: "Breathy"}, {name: "Erinome", gender: "Female", desc: "Clear"},
+        {name: "Fenrir", gender: "Male", desc: "Excitable"}, {name: "Gacrux", gender: "Female", desc: "Mature"},
+        {name: "Iapetus", gender: "Male", desc: "Clear"}, {name: "Kore", gender: "Female", desc: "Firm"},
+        {name: "Laomedeia", gender: "Female", desc: "Upbeat"}, {name: "Leda", gender: "Female", desc: "Youthful"},
+        {name: "Orus", gender: "Male", desc: "Firm"}, {name: "Puck", gender: "Male", desc: "Upbeat"},
+        {name: "Pulcherrima", gender: "Female", desc: "Forward"}, {
+            name: "Rasalgethi",
+            gender: "Male",
+            desc: "Informative"
+        },
+        {name: "Sadachbia", gender: "Male", desc: "Lively"}, {
+            name: "Sadaltager",
+            gender: "Male",
+            desc: "Knowledgeable"
+        },
+        {name: "Schedar", gender: "Male", desc: "Even"}, {name: "Sulafat", gender: "Female", desc: "Warm"},
+        {name: "Umbriel", gender: "Male", desc: "Easy-going"}, {name: "Vindemiatrix", gender: "Female", desc: "Gentle"},
+        {name: "Zephyr", gender: "Female", desc: "Bright"}, {name: "Zubenelgenubi", gender: "Male", desc: "Casual"}
+    ];
+
+    const voiceComp = document.getElementById('voice-component');
+    const voiceTrigger = document.getElementById('voice-trigger');
+    const voiceDisplay = document.getElementById('voice-display');
+    const voiceOptions = document.getElementById('voice-options');
+
+    rawVoices.forEach(v => {
+        const div = document.createElement('div');
+        div.className = 'select-option';
+        if (v.name === selectedVoice) {
+            div.classList.add('selected');
+            voiceDisplay.innerText = `${v.name} // ${v.gender} • ${v.desc}`;
+        }
+        div.innerHTML = `<span>${v.name}</span><span class="opt-meta">${v.gender} • ${v.desc}</span>`;
+        div.addEventListener('click', () => {
+            selectedVoice = v.name;
+            voiceDisplay.innerText = `${v.name} // ${v.gender} • ${v.desc}`;
+            voiceComp.classList.remove('open');
+            document.querySelectorAll('.select-option').forEach(o => o.classList.remove('selected'));
+            div.classList.add('selected');
+        });
+        voiceOptions.appendChild(div);
+    });
+
+    voiceTrigger.addEventListener('click', (e) => {
+        if (!state.isRunning) {
             e.stopPropagation();
-            customSelect.classList.toggle('open');
-        });
+            voiceComp.classList.toggle('open');
+        }
+    });
+    window.addEventListener('click', (e) => {
+        if (!voiceComp.contains(e.target)) voiceComp.classList.remove('open');
+    });
 
-        document.addEventListener('click', (e) => {
-            if (!customSelect.contains(e.target)) {
-                customSelect.classList.remove('open');
+    function toggleInputs(enable) {
+        document.querySelectorAll('.input-box').forEach(i => i.disabled = !enable);
+        document.getElementById('drop-zone').classList.toggle('disabled', !enable);
+        document.getElementById('voice-trigger').classList.toggle('disabled', !enable);
+    }
+
+    function updateNodeState(id, status, text) {
+        const el = nodeEls[id];
+        document.getElementById(`msg-${id}`).innerText = text || status;
+        const edgeIn = edgeEls.find(e => e.to === id);
+        if (status === 'active') {
+            el.classList.add('active');
+            el.classList.remove('completed');
+            if (edgeIn) {
+                gsap.set(edgeIn.path, {clearProps: "all"});
+                edgeIn.path.classList.add('active');
+                edgeIn.path.classList.remove('completed');
             }
-        });
-    }
-    initCustomSelect();
-
-    // --- UI LOGIC ---
-    directorToggle.addEventListener('change', (e) => {
-        if(e.target.checked) { directorInput.classList.add('visible'); directorInput.focus(); }
-        else { directorInput.classList.remove('visible'); }
-    });
-
-    contextToggle.addEventListener('change', (e) => {
-        if(e.target.checked) { contextInput.classList.add('visible'); contextInput.focus(); }
-        else { contextInput.classList.remove('visible'); }
-    });
-
-    // Toggle History Drawer
-    btnHistoryToggle.addEventListener('click', () => {
-        logHistoryEl.classList.toggle('visible');
-        btnHistoryToggle.textContent = logHistoryEl.classList.contains('visible') ? "Hide History" : "Show History";
-    });
-
-    dropTarget.addEventListener('click', () => fileInput.click());
-    dropTarget.addEventListener('dragover', (e) => { e.preventDefault(); dropTarget.classList.add('drag-over'); });
-    dropTarget.addEventListener('dragleave', () => dropTarget.classList.remove('drag-over'));
-    dropTarget.addEventListener('drop', (e) => {
-        e.preventDefault(); dropTarget.classList.remove('drag-over');
-        if (e.dataTransfer.files.length) startJob(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length) startJob(e.target.files[0]);
-    });
-
-    btnReset.addEventListener('click', resetApplication);
-    btnCloseModal.addEventListener('click', () => modalBackdrop.classList.remove('active'));
-
-    btnViewScript.addEventListener('click', () => {
-        if (!generatedScriptText) return;
-        scriptContentArea.textContent = generatedScriptText;
-        modalBackdrop.classList.add('active');
-    });
-
-    chipScript.addEventListener('click', () => {
-        if (!generatedScriptText) return;
-        scriptContentArea.textContent = generatedScriptText;
-        modalBackdrop.classList.add('active');
-    });
-
-    modalBackdrop.addEventListener('click', (e) => {
-        if (e.target === modalBackdrop) {
-            modalBackdrop.classList.remove('active');
-        }
-    });
-
-    btnCancel.addEventListener('click', () => {
-        if (abortController) {
-            abortController.abort();
-            abortController = null;
-        }
-        addToHistory("Job cancelled by user");
-        statusDot.classList.remove('active', 'error');
-        resetApplication();
-    });
-
-    // --- SCRAMBLER ---
-    class TextScramble {
-        constructor(el) {
-            this.el = el;
-            this.chars = '!<>-_\\/[]{}—=+*^?#________';
-            this.update = this.update.bind(this);
-        }
-        setText(newText) {
-            const oldText = this.el.innerText;
-            const length = Math.max(oldText.length, newText.length);
-            const promise = new Promise((resolve) => this.resolve = resolve);
-            this.queue = [];
-            for (let i = 0; i < length; i++) {
-                const from = oldText[i] || '';
-                const to = newText[i] || '';
-                const start = Math.floor(Math.random() * 40);
-                const end = start + Math.floor(Math.random() * 40);
-                this.queue.push({ from, to, start, end });
+        } else if (status === 'complete') {
+            el.classList.remove('active');
+            el.classList.add('completed');
+            el.querySelector('.status-dot').innerText = "✓";
+            if (edgeIn) {
+                edgeIn.path.classList.remove('active');
+                edgeIn.path.classList.add('completed');
+                gsap.to(edgeIn.path, {
+                    stroke: '#fff',
+                    strokeWidth: 4,
+                    strokeDasharray: "none",
+                    opacity: 1,
+                    duration: 0.5
+                });
             }
-            cancelAnimationFrame(this.frameRequest);
-            this.frame = 0;
-            this.update();
-            return promise;
-        }
-        update() {
-            let output = '';
-            let complete = 0;
-            for (let i = 0, n = this.queue.length; i < n; i++) {
-                let { from, to, start, end, char } = this.queue[i];
-                if (this.frame >= end) { complete++; output += to; }
-                else if (this.frame >= start) {
-                    if (!char || Math.random() < 0.28) {
-                        char = this.chars[Math.floor(Math.random() * this.chars.length)];
-                        this.queue[i].char = char;
-                    }
-                    output += `<span class="dud">${char}</span>`;
-                } else { output += from; }
-            }
-            this.el.innerHTML = output;
-            if (complete === this.queue.length) { this.resolve(); }
-            else { this.frameRequest = requestAnimationFrame(this.update); this.frame++; }
+        } else if (status === 'reset') {
+            el.classList.remove('active', 'completed');
+            el.querySelector('.status-dot').innerText = "";
+            document.getElementById(`msg-${id}`).innerText = "Idle";
+            edgeEls.forEach(e => {
+                e.path.classList.remove('active', 'completed');
+                gsap.set(e.path, {stroke: '#333', strokeWidth: 2, strokeDasharray: "none", opacity: 1});
+            });
         }
     }
-    const scrambler = new TextScramble(document.getElementById('mainStatus'));
 
-    // Check for video in URL on page load
-    function checkUrlForVideo() {
-        const params = new URLSearchParams(window.location.search);
-        const videoUrl = params.get('video');
-        if (videoUrl) {
-            viewUpload.classList.add('hidden');
-            viewProcess.classList.add('hidden');
-            finalVideo.src = videoUrl;
-            viewResult.classList.add('active');
-        }
-    }
-    checkUrlForVideo();
-
-
-    // --- MAIN LOGIC ---
-    function startJob(file) {
-        const selectedVoice = voiceSelectInput.value;
-        const styleInstruction = directorToggle.checked ? directorInput.value : '';
-        const context = contextToggle.checked ? contextInput.value : '';
-
-        viewUpload.style.opacity = '0';
-        setTimeout(() => {
-            viewUpload.classList.add('hidden');
-            viewProcess.classList.remove('hidden');
-            viewProcess.style.display = 'flex';
-            btnCancel.classList.remove('hidden');
-            setTimeout(() => document.getElementById('artifactRow').classList.add('visible'), 500);
-        }, 400);
-
-        connectAndStream(file, selectedVoice, styleInstruction, context);
-    }
-
-    async function connectAndStream(file, voice, instruction, context) {
-        const formData = new FormData();
-        formData.append('files', file);
-        formData.append('voice', voice);
-        if (instruction && instruction.trim() !== "") {
-            formData.append('voiceStyleInstruction', instruction);
-        }
-        if (context && context.trim() !== "") {
-            formData.append('context', context);
+    document.getElementById('run-btn').onclick = async function () {
+        const btn = this;
+        if (state.isRunning) {
+            if (abortController) abortController.abort();
+            state.isRunning = false;
+            toggleInputs(true);
+            btn.innerText = "Initiate Protocol";
+            btn.classList.remove('terminate');
+            Object.keys(nodeEls).forEach(k => updateNodeState(k, 'reset'));
+            logEvent('update', 'Sequence terminated by user');
+            return;
         }
 
+        const file = document.getElementById('file-input').files[0];
+        if (!file) return alert("Select a file first.");
+
+        state.isRunning = true;
+        toggleInputs(false);
+        btn.innerText = "TERMINATE SEQUENCE";
+        btn.classList.add('terminate');
+        state.nodes = {};
+        Object.keys(nodeEls).forEach(k => updateNodeState(k, 'reset'));
+        clearConsole();
         abortController = new AbortController();
-        jobCompleted = false;
-        statusDot.classList.remove('error');
-        statusDot.classList.add('active');
+
+        logEvent('update', `Protocol initiated with file: ${file.name}`);
+
+        const fd = new FormData();
+        fd.append('files', file);
+        fd.append('voice', selectedVoice);
+        fd.append('voiceStyleInstruction', document.getElementById('style-input').value);
+        fd.append('context', document.getElementById('context-input').value);
 
         try {
-            const response = await fetch('http://localhost:5000/api/v1/generate', {
-                method: 'POST', body: formData, credentials: 'include',
-                signal: abortController.signal
+            updateNodeState('upload', 'active', 'Uploading...');
+            logEvent('update', 'Uploading file...');
+            const res = await fetch('http://localhost:5000/api/v1/generate', {
+                method: 'POST', body: fd, signal: abortController.signal
             });
+            updateNodeState('upload', 'complete', 'Done');
+            logEvent('update', 'Upload complete');
 
-            if (!response.ok) throw new Error("Server Connection Failed");
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let buffer = "";
-
-            updateUI("Connecting", "Handshake established...", 5);
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
 
             while (true) {
-                const { done, value } = await reader.read();
+                const {done, value} = await reader.read();
                 if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                buffer += chunk;
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop();
-                for (const line of lines) parseSSEEvent(line);
+                const chunks = decoder.decode(value).split('\n\n');
+                for (const chunk of chunks) {
+                    if (chunk.startsWith('event:')) {
+                        const type = chunk.match(/event: (.*)/)[1];
+                        const dataStr = chunk.split('data: ')[1];
+                        if (!dataStr) continue;
+                        const data = JSON.parse(dataStr);
+
+                        logEvent(type, data.message || JSON.stringify(data).substring(0, 100));
+
+                        if (type === 'update') {
+                            const m = data.message.toLowerCase();
+                            if (m.includes('extracting')) {
+                                updateNodeState('extract', 'active', 'Extracting Images...');
+                            } else if (m.includes('detecting')) {
+                                updateNodeState('upload', 'complete');
+                                updateNodeState('extract', 'active', 'Detecting Panels...');
+                            } else if (m.includes('generating script')) {
+                                updateNodeState('extract', 'complete');
+                                updateNodeState('script', 'active', m);
+                            } else if (m.includes('splitting')) {
+                                updateNodeState('script', 'complete');
+                                updateNodeState('split', 'active', m);
+                            } else if (m.includes('speech')) {
+                                updateNodeState('split', 'complete');
+                                updateNodeState('speech', 'active', m);
+                            } else if (m === 'complete') {
+                                updateNodeState('speech', 'complete');
+                                updateNodeState('video', 'complete', 'READY');
+                                state.nodes['video'] = data.video;
+                                openInspector('video');
+                                state.isRunning = false;
+                                toggleInputs(true);
+                                btn.innerText = "Initiate Protocol";
+                                btn.classList.remove('terminate');
+                            }
+                        } else if (type === 'script') state.nodes['script'] = data.script;
+                        else if (type === 'split') state.nodes['split'] = data.splits;
+                    }
+                }
             }
-
-            // Check if connection closed without completing
-            if (!jobCompleted) {
-                throw new Error("Connection closed unexpectedly");
-            }
-
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.log('Request cancelled');
-                statusDot.classList.remove('active');
-                return;
-            }
-            console.error(error);
-            statusDot.classList.remove('active');
-            statusDot.classList.add('error');
-            updateUI("Connection Error", error.message || "Check console for details", 0);
-            addToHistory("Error: " + (error.message || "Connection failed"));
-        }
-    }
-
-    function parseSSEEvent(eventString) {
-        const lines = eventString.split('\n');
-        let eventType = 'message';
-        let data = null;
-
-        lines.forEach(line => {
-            if (line.startsWith('event: ')) eventType = line.replace('event: ', '').trim();
-            if (line.startsWith('data: ')) {
-                try { data = JSON.parse(line.replace('data: ', '')); }
-                catch (e) { console.log('JSON Parse Error', e); }
-            }
-        });
-
-        if (data) handleServerData(eventType, data);
-    }
-
-    let currentProgress = 5;
-
-    function handleServerData(event, data) {
-        // 1. STATUS UPDATE & HISTORY LOGGING
-        if (event === 'update' && data.message) {
-            const msg = data.message.toLowerCase();
-
-            // Add to History
-            addToHistory(data.message);
-
-            // Scrambler Logic
-            if (msg.includes("extracting")) updateUI("Extraction", "Extracting panels...", 15);
-            else if (msg.includes("detecting")) updateUI("Vision", "Detecting panels...", 25);
-            else if (msg.includes("script")) updateUI("Scripting", "Generating screenplay...", 40);
-            else if (msg.includes("splitting")) updateUI("Audio Prep", "Splitting script...", 55);
-            else if (msg.includes("converting") || msg.includes("generated")) {
-                currentProgress = Math.min(currentProgress + 2, 85);
-                updateUI(null, data.message, currentProgress);
-                document.getElementById('chipAudio').classList.add('active');
-            }
-            else if (msg.includes("merging")) updateUI("Rendering", "Merging streams...", 95);
-            else if (msg.includes("complete")) {
-                jobCompleted = true;
-                updateUI("Finalizing", "Done", 100);
-                finishJob(data.video);
-            }
-            else updateUI(null, data.message, currentProgress);
-        }
-
-        // 2. DATA EVENTS
-        if (event === 'script') {
-            if (data.script) {
-                generatedScriptText = typeof data.script === 'object' ? JSON.stringify(data.script, null, 2) : data.script;
-                chipScript.classList.add('active', 'interactive');
-                updateUI(null, "Script ready to view", null);
-                addToHistory("Artifact Received: Screenplay");
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                console.error(e);
+                logEvent('error', `Error: ${e.message}`);
+                alert("Error.");
+                state.isRunning = false;
+                toggleInputs(true);
+                btn.innerText = "Initiate Protocol";
+                btn.classList.remove('terminate');
             }
         }
-        if (event === 'split') {
-            document.getElementById('chipAudio').classList.add('active');
-            addToHistory("Artifact Received: Audio Splits");
-        }
-    }
+    };
 
-    function addToHistory(message) {
-        const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        item.innerHTML = `<span class="history-time">[${time}]</span> <span class="history-msg">${message}</span>`;
-
-        // Prepend so newest is top, or append? Usually log is append.
-        // Let's append and auto scroll.
-        logHistoryEl.appendChild(item);
-        logHistoryEl.scrollTop = logHistoryEl.scrollHeight;
-    }
-
-    function updateUI(mainMsg, subMsg, progress) {
-        if (mainMsg) scrambler.setText(mainMsg);
-        if (subMsg) metaLogEl.innerHTML = `<span>> ${subMsg}</span>`;
-        if (progress !== null && progress !== undefined) {
-            currentProgress = progress;
-            progressBar.style.width = `${progress}%`;
-        }
-    }
-
-    function finishJob(videoUrl) {
-        document.getElementById('chipVideo').classList.add('active');
-        addToHistory("Job Complete. Video Ready.");
-        btnCancel.classList.add('hidden');
-        statusDot.classList.remove('active');
-
-        // Update URL with video query parameter
-        if (videoUrl) {
-            const url = new URL(window.location);
-            url.searchParams.set('video', videoUrl);
-            window.history.pushState({}, '', url);
-        }
-
-        setTimeout(() => {
-            finalVideo.src = videoUrl || "";
-            viewResult.classList.add('active');
-            finalVideo.play();
-        }, 1000);
-    }
-
-    function resetApplication() {
-        if (abortController) {
-            abortController.abort();
-            abortController = null;
-        }
-        jobCompleted = false;
-        currentProgress = 0;
-        progressBar.style.width = '0%';
-        fileInput.value = '';
-        finalVideo.pause();
-        finalVideo.src = '';
-        generatedScriptText = null;
-        logHistoryEl.innerHTML = ''; // Clear History
-        logHistoryEl.classList.remove('visible'); // Hide drawer
-        btnHistoryToggle.textContent = "Show History";
-
-        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active', 'interactive'));
-        viewResult.classList.remove('active');
-        viewProcess.classList.add('hidden');
-        viewUpload.classList.remove('hidden');
-        btnCancel.classList.add('hidden');
-
-        // Clear video query parameter from URL
-        const url = new URL(window.location);
-        url.searchParams.delete('video');
-        window.history.replaceState({}, '', url);
-
-        setTimeout(() => {
-            viewUpload.style.opacity = '1';
-            scrambler.setText("Initializing");
-        }, 100);
-    }
-
+    document.getElementById('drop-zone').onclick = () => {
+        if (!state.isRunning) document.getElementById('file-input').click();
+    };
+    document.getElementById('file-input').onchange = (e) => document.getElementById('file-name').innerText = e.target.files[0]?.name || "Select File";
 </script>
 </body>
 </html>

@@ -1,13 +1,13 @@
 import type AppSecrets from "../../../../pkg/secret";
 import type AIRepository from "../../../domains/ai/repo.ts";
 import path from "path";
-import {readdir} from "fs/promises";
-import {join} from "path";
+import { readdir } from "fs/promises";
+import { join } from "path";
 import mime from "mime";
-import {SplitScriptPrompt} from "../../../../pkg/prompts/split.ts";
+import { SplitScriptPrompt } from "../../../../pkg/prompts/split.ts";
 import SliceComic from "../../../../pkg/utils/extractCBR.ts";
-import {WithRetry} from "../../../../pkg/utils/retry.ts";
-import type {UploadedFile, Voice} from "../../../domains/ai";
+import { WithRetry } from "../../../../pkg/utils/retry.ts";
+import type { UploadedFile, Voice } from "../../../domains/ai";
 import {
     SaveWaveFile
 } from "../../../../pkg/utils/audio";
@@ -18,8 +18,8 @@ import {
     type Effect,
     OppositeEffect
 } from "../../../../pkg/utils/video.ts";
-import {AudioPrompt} from "../../../../pkg/prompts/live.ts";
-import {ScriptPrompt} from "../../../../pkg/prompts/script.ts";
+import { AudioPrompt } from "../../../../pkg/prompts/live.ts";
+import { ScriptPrompt } from "../../../../pkg/prompts/script.ts";
 
 type ScriptPagePanel = {
     page: number;
@@ -51,7 +51,7 @@ export default class Generate {
     constructor(private readonly aiRepository: AIRepository, private readonly appSecrets: AppSecrets) {
     }
 
-    async* handle(files: File[], voice: Voice = "Zephyr", style: string,context: string, abortController?: AbortController): AsyncGenerator<{
+    async* handle(files: File[], voice: Voice = "Zephyr", style: string, context: string, abortController?: AbortController): AsyncGenerator<{
         event: string,
         data: any
     }> {
@@ -63,7 +63,7 @@ export default class Generate {
             let dir = path.resolve("results", uniqueSuffix)
             yield* SliceComic(file.path, dir);
 
-            const images = (await readdir(dir, {withFileTypes: true}))
+            const images = (await readdir(dir, { withFileTypes: true }))
                 .filter(d => d.isFile() && !d.name.includes("cover_blur"))
                 .map(d => ({
                     path: join(dir, d.name),
@@ -71,29 +71,29 @@ export default class Generate {
                 }))
                 .filter(img => img.mimeType.startsWith("image/"));
 
-            yield {event: "update", data: {message: "uploading images for processing"}}
+            yield { event: "update", data: { message: "uploading images for processing" } }
             const uploadedNumberImages = await WithRetry(() => this.aiRepository.uploadFiles(images))
 
-            yield {event: "update", data: {message: "generating script"}}
+            yield { event: "update", data: { message: "generating script" } }
             const {
                 response: script,
                 dollars: scriptDorris
             } = await WithRetry(() => this.aiRepository.generateText(ScriptPrompt(context), false, uploadedNumberImages))
             totalDorris += scriptDorris
-            yield {event: "script", data: {script}}
+            yield { event: "script", data: { script } }
 
-            yield {event: "update", data: {message: "splitting generated script"}}
-            const {data: pagePanels, dollars: splitDollars} = await WithRetry(() =>
+            yield { event: "update", data: { message: "splitting generated script" } }
+            const { data: pagePanels, dollars: splitDollars } = await WithRetry(() =>
                 this.generatePagePanelMapping(script, uploadedNumberImages)
             )
             totalDorris += splitDollars
             const pageGroups = this.groupByPage(pagePanels)
-            yield {event: "split", data: {splits: pageGroups}}
+            yield { event: "split", data: { splits: pageGroups } }
 
             let videoPaths: string[] = []
-            const BATCH_SIZE = 3;
+            const BATCH_SIZE = this.appSecrets.batchSize;
 
-            yield {event: "update", data: {message: "converting splits to speech"}}
+            yield { event: "update", data: { message: "converting splits to speech" } }
             for (let batchStart = 0; batchStart < pageGroups.length; batchStart += BATCH_SIZE) {
                 const batchEnd = Math.min(batchStart + BATCH_SIZE, pageGroups.length);
                 const batchGroups = pageGroups.slice(batchStart, batchEnd);
@@ -107,7 +107,7 @@ export default class Generate {
                     let image = images[pageGroup.page - 1];
                     if (!image) return null;
 
-                    const {dir: imageDir, name: imageName} = path.parse(image.path);
+                    const { dir: imageDir, name: imageName } = path.parse(image.path);
                     const panelDir = path.resolve(imageDir, imageName);
 
                     const panelCount = await this.countPanelsInFolder(panelDir);
@@ -168,14 +168,14 @@ export default class Generate {
                 for (const result of batchResults) {
                     if (!result) continue;
 
-                    const {originalIndex, pageGroup, image, splitData, audioResults, lastSplit} = result;
+                    const { originalIndex, pageGroup, image, splitData, audioResults, lastSplit } = result;
 
                     if (lastSplit) {
                         lastScriptSplit = lastSplit;
                     }
 
                     let videoData: { panel: string; duration: number; effect: Effect }[] = [];
-                    const {dir, name} = path.parse(image.path);
+                    const { dir, name } = path.parse(image.path);
                     const audioBuffers: Buffer[] = [];
                     let taskDollars = 0;
 
@@ -191,7 +191,7 @@ export default class Generate {
                         audioBuffers.push(audioBuffer);
                         audioBuffers.push(this.generateSilence(1));
                         const duration = this.getBufferDuration(audioBuffer);
-                        videoData.push({panel, duration: duration + 1, effect: audioResult.datum.effect});
+                        videoData.push({ panel, duration: duration + 1, effect: audioResult.datum.effect });
                     }
 
                     const iDir = path.resolve(dir, name);
@@ -216,13 +216,14 @@ export default class Generate {
                     });
                 }
 
-                // Run all video creation and audio merging in parallel
-                const videoPromises = videoProcessingTasks.map(async (task) => {
+                // Run video creation and audio merging sequentially
+                for (const task of videoProcessingTasks) {
                     await CreateVideoFromImages(task.videoData, task.videoPath, {
                         fps: 30,
                         width: 1920,
                         height: 1080,
                         backgroundImage: task.coverBlurPath,
+                        hwAccel: this.appSecrets.hardwareAccelerator
                     });
                     await MergeAudioToVideo(
                         task.videoPath,
@@ -234,22 +235,17 @@ export default class Generate {
                             volume: 0.8,
                         }
                     );
-                    return task;
-                });
 
-                const completedTasks = await Promise.all(videoPromises);
-
-                for (const task of completedTasks) {
                     totalDorris += task.totalDollars;
-                    yield {event: "update", data: {message: `speech generated for page  ${task.pageGroup.page}`}};
-                    yield {event: "update", data: {message: `video created for page  ${task.pageGroup.page}`}};
+                    yield { event: "update", data: { message: `speech generated for page  ${task.pageGroup.page}` } };
+                    yield { event: "update", data: { message: `video created for page  ${task.pageGroup.page}` } };
                     videoPaths.push(task.videoAudioPath);
                 }
             }
-            yield {event: "update", data: {message: `merging videos`}};
+            yield { event: "update", data: { message: `merging videos` } };
             const videoPath = path.join(dir, `video.mp4`);
             await MergeVideos(videoPaths, videoPath);
-            yield {event: "update", data: {message: `complete`, totalDorris, video: path.join("results", uniqueSuffix, "video.mp4")}};
+            yield { event: "update", data: { message: `complete`, totalDorris, video: `${this.appSecrets.url}/results/${uniqueSuffix}/video.mp4` } };
         }
     }
 
@@ -269,7 +265,7 @@ export default class Generate {
 
     private async countPanelsInFolder(panelDir: string): Promise<number> {
         try {
-            const files = await readdir(panelDir, {withFileTypes: true});
+            const files = await readdir(panelDir, { withFileTypes: true });
             const panelFiles = files.filter(f =>
                 f.isFile() &&
                 /^\d+\.(jpg|jpeg|png|webp)$/i.test(f.name)
@@ -319,20 +315,20 @@ export default class Generate {
     }
 
     async generatePagePanelMapping(script: string, images: UploadedFile[]): Promise<Response<ScriptPagePanel[]>> {
-        let {response, dollars} = await this.aiRepository.generateText(
+        let { response, dollars } = await this.aiRepository.generateText(
             SplitScriptPrompt(script),
             false,
             images
         )
-        return {data: this.parseScriptPagePanels(response), dollars}
+        return { data: this.parseScriptPagePanels(response), dollars }
     }
 
     async generateAudio(voice: Voice, style: string, scriptSplit: string, previousScript?: string): Promise<Response<string>> {
-        let {response, dollars} = await this.aiRepository.generateAudioLive(
+        let { response, dollars } = await this.aiRepository.generateAudioLive(
             AudioPrompt(scriptSplit, style, previousScript),
             voice
         )
-        return {data: response, dollars}
+        return { data: response, dollars }
     }
 
     private groupByPage(pagePanels: ScriptPagePanel[]): PageGroup[] {
