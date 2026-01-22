@@ -48,19 +48,6 @@ export default class ExpressHTTP {
             legacyHeaders: false,
             message: { error: 'Too many requests, please try again later.' }
         }))
-        this.server.use(cookieParser(this.appSecrets.cookieSecret));
-        const corsOptions = {
-            origin: this.appSecrets.clientOrigin,
-            credentials: true,
-            methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-            allowedHeaders: [
-                'Content-Type',
-                'Authorization',
-                'X-Requested-With',
-                'ngrok-skip-browser-warning' // Important for ngrok
-            ],
-        };
-        this.server.use(cors(corsOptions));
         let morganMiddleware = new MorganMiddleware()
         this.server.use(morganMiddleware.middleware)
 

@@ -21,10 +21,11 @@ You will receive:
 3. **Match** each script segment to the page that best represents its content
 
 ### Phase 2: Panel-Level Assignment
-4. **Analyze** each panel's shape on the assigned page (horizontal, vertical, or square)
-5. **Further split** the page-level segment into panel-level pieces
-6. **Assign** each piece to a specific labeled panel
-7. **Select** a valid motion effect based on panel shape
+4. **Determine the visual reading order** of panels on each page (see Panel Reading Order section)
+5. **Analyze** each panel's shape on the assigned page (horizontal, vertical, or square)
+6. **Further split** the page-level segment into panel-level pieces
+7. **Assign** each piece to a specific labeled panel following visual reading order
+8. **Select** a valid motion effect based on panel shape
 
 ---
 
@@ -92,20 +93,62 @@ Before assigning panel effects, examine each labeled panel and classify its shap
 
 | Shape | How to Identify | Allowed Effects |
 |-------|-----------------|-----------------|
-| **Horizontal** | Width > Height | \`none\`, \`zoomIn\`, \`zoomOut\`, \`panLeft\`, \`panRight\` |
-| **Vertical** | Height > Width | \`none\`, \`zoomIn\`, \`zoomOut\`, \`panUp\`, \`panDown\` |
+| **Horizontal** | Width > Height | \`panLeft\`, \`panRight\` ONLY |
+| **Vertical** | Height > Width | \`zoomIn\`, \`zoomOut\` ONLY |
 | **Square** | Width ≈ Height | \`zoomIn\`, \`zoomOut\` ONLY |
 
 ---
 
-## PANEL SELECTION RULES
+## PANEL READING ORDER (CRITICAL)
 
-### Reading Order (MANDATORY)
-Within each page, panels MUST be assigned in reading order: 1 → 2 → 3 → 4, etc.
+### Panel Labels vs. Visual Position
 
-❌ **FORBIDDEN**: Panel 1 → Panel 3 → Panel 2 (going backward)
-❌ **FORBIDDEN**: Panel 2 → Panel 4 → Panel 2 (returning to earlier panel)
-✅ **ALLOWED**: Panel 1 → Panel 1 → Panel 2 → Panel 2 → Panel 3 (consecutive repeats, forward progress)
+**IMPORTANT:** The panel numbers shown in the images (PANEL 1, PANEL 2, etc.) are labels assigned by an automated system and **DO NOT necessarily reflect the correct reading order**.
+
+You must determine the actual reading order by analyzing the **visual position** of each panel on the page, NOT by following the numerical labels.
+
+### How to Determine Reading Order
+
+**Step 1: Identify the comic's reading direction**
+- **Western comics (default):** Read LEFT-TO-RIGHT, TOP-TO-BOTTOM
+- **Manga:** Read RIGHT-TO-LEFT, TOP-TO-BOTTOM
+
+Assume Western reading order unless the comic is clearly manga (Japanese art style, Japanese text, or explicitly stated).
+
+**Step 2: Map panel positions visually**
+
+For each page, mentally divide it into rows. Within each row, identify which panels appear from left to right (or right to left for manga).
+
+**Example (Western comic with 3 columns, 4 rows):**
+\`\`\`
+Row 1: [LEFT panel] → [CENTER panel] → [RIGHT panel]
+Row 2: [LEFT panel] → [CENTER panel] → [RIGHT panel]
+Row 3: [LEFT panel] → [CENTER panel] → [RIGHT panel]
+Row 4: [LEFT panel] → [CENTER panel] → [RIGHT panel]
+\`\`\`
+
+**Step 3: Create your reading sequence**
+
+List the panel LABELS in the order they should be READ based on visual position.
+
+**Example:** If Panel 2 is top-left, Panel 1 is top-center, Panel 3 is top-right:
+- Visual reading order: Panel 2 → Panel 1 → Panel 3
+- You will assign script to panels in this order: 2, 1, 3 (NOT 1, 2, 3)
+
+### Reading Order Rules
+
+Once you've determined the visual reading order:
+
+✅ **ALLOWED:** Following visual reading order even if label numbers seem "out of order"
+   - Example: Panel 2 → Panel 1 → Panel 3 (if that's the visual left-to-right, top-to-bottom order)
+
+✅ **ALLOWED:** Consecutive repeats of the same panel
+   - Example: Panel 2 → Panel 2 → Panel 1 → Panel 1
+
+❌ **FORBIDDEN:** Going backward in VISUAL reading order
+   - If you've moved to a panel that's visually to the right or below, you cannot return to a panel that's visually to the left or above
+
+❌ **FORBIDDEN:** Staying on one panel for an entire page when multiple panels exist
 
 ### When to Repeat a Panel
 Only repeat the same panel consecutively when:
@@ -121,7 +164,7 @@ Move forward when:
 - There's a narrative beat change
 
 ### Use Multiple Panels
-If the page has multiple panels, **distribute the script across them**. Do not stay on panel 1 for the entire page unless the script explicitly describes only what's in panel 1.
+If the page has multiple panels, **distribute the script across them**. Do not stay on one panel for the entire page unless the script explicitly describes only what's in that panel.
 
 ---
 
@@ -130,13 +173,10 @@ If the page has multiple panels, **distribute the script across them**. Do not s
 ### Effect Definitions
 | Effect | Description |
 |--------|-------------|
-| \`none\` | Static, no motion |
 | \`zoomIn\` | Slowly zoom toward center |
 | \`zoomOut\` | Start zoomed in, pull back |
 | \`panLeft\` | Camera moves left (horizontal panels only) |
 | \`panRight\` | Camera moves right (horizontal panels only) |
-| \`panUp\` | Camera moves up (vertical panels only) |
-| \`panDown\` | Camera moves down (vertical panels only) |
 
 ## PANEL-LEVEL SCRIPT SPLITTING
 
@@ -161,7 +201,7 @@ Output ONLY a valid JSON array. No Markdown code fences. No commentary.
   {
     "page": <integer: the bold number at bottom right of page>,
     "script": "<string: the script segment for this panel>",
-    "panel": <integer: panel number from image>,
+    "panel": <integer: panel label number from image>,
     "effect": "<string: valid effect for panel shape>"
   }
 ]
@@ -171,7 +211,7 @@ Output ONLY a valid JSON array. No Markdown code fences. No commentary.
 
 - \`page\` must be an integer (the bold number from bottom right)
 - \`script\` must be a string containing the exact script segment including all delivery tags and break tags
-- \`panel\` must be an integer matching a labeled panel on that page
+- \`panel\` must be an integer matching a labeled panel on that page (use the label number, but assign in visual reading order)
 - \`effect\` must be a valid effect string for the panel's shape
 - Preserve all formatting within the script string: \`[tags]\`, \`<break time="Xs" />\`, quotation marks
 - Escape internal quotes properly for valid JSON
@@ -181,18 +221,20 @@ Output ONLY a valid JSON array. No Markdown code fences. No commentary.
 
 ## EXAMPLE OUTPUT
 
+Note: In this example, the visual reading order was determined to be Panel 2 → Panel 1 → Panel 3 based on their positions on the page.
+
 [
   {
     "page": 1,
     "script": "The nightmare begins in red light.",
-    "panel": 1,
+    "panel": 2,
     "effect": "zoomIn"
   },
   {
     "page": 1,
     "script": "A boy pounds on a door, screaming for his father,",
-    "panel": 2,
-    "effect": "panDown"
+    "panel": 1,
+    "effect": "panRight"
   },
   {
     "page": 1,
@@ -227,15 +269,17 @@ Before outputting, verify:
 - [ ] Script segments appear in correct story order
 
 ### Panel-Level Validation
+- [ ] Did I determine the VISUAL reading order for each page (not just follow label numbers)?
+- [ ] Did I identify whether this is Western (L→R) or Manga (R→L) reading direction?
+- [ ] Are panels assigned in VISUAL reading order (based on position, not label number)?
 - [ ] Did I classify each panel's shape on each page?
-- [ ] Are panels in reading order within each page (no going backward)?
 - [ ] Are repeated panels consecutive only?
 - [ ] For each panel, is the effect valid for its shape?
-   - Horizontal: no \`panUp\`/\`panDown\`
-   - Vertical: no \`panLeft\`/\`panRight\`
-   - Square: \`zoomIn\` or \`zoomOut\` only (no \`none\`, no panning)
+   - Horizontal: \`panLeft\` or \`panRight\` only (no zooming)
+   - Vertical: \`zoomIn\` or \`zoomOut\` only (no panning)
+   - Square: \`zoomIn\` or \`zoomOut\` only (no panning)
 - [ ] For consecutive repeats, do effects alternate?
-- [ ] Did I use multiple panels per page (not just panel 1 for everything)?
+- [ ] Did I use multiple panels per page (not just one panel for everything)?
 
 ### JSON Validation
 - [ ] The JSON is syntactically valid
@@ -251,16 +295,18 @@ Before outputting, verify:
 🚫 **NEVER** assign script to any non-story page (see "Pages to Skip" section)
 
 ### Effect Rules
-🚫 **NEVER** use \`panUp\` or \`panDown\` on a horizontal panel
-🚫 **NEVER** use \`panLeft\` or \`panRight\` on a vertical panel
+🚫 **NEVER** use \`zoomIn\` or \`zoomOut\` on a horizontal panel
 🚫 **NEVER** use any pan effect on a square panel
-🚫 **NEVER** use \`none\` on a square panel (must be \`zoomIn\` or \`zoomOut\`)
+🚫 **NEVER** use any pan effect on a vertical panel
 🚫 **NEVER** use the same effect consecutively on a repeated panel
 
 ### Panel Order Rules
-🚫 **NEVER** go backward in panel order within a page (3 → 2)
-🚫 **NEVER** return to an earlier panel after moving past it
-🚫 **NEVER** stay on panel 1 for an entire page if multiple panels exist
+🚫 **NEVER** assume panel label numbers (1, 2, 3) reflect the correct reading order
+🚫 **NEVER** go backward in VISUAL reading order (returning to a panel that's above or to the left in Western comics, or above or to the right in manga)
+🚫 **NEVER** return to an earlier panel in the visual sequence after moving past it
+🚫 **NEVER** stay on one panel for an entire page if multiple panels exist
+✅ **ALWAYS** determine reading order by visual position on the page
+✅ **ALWAYS** use the panel LABELS in your output (they're needed to reference the correct image)
 
 ### Content Rules
 🚫 **NEVER** drop or lose any script content
@@ -276,7 +322,7 @@ Before outputting, verify:
 - Do NOT wrap the JSON in Markdown code fences (no \`\`\`json\`\`\`)
 - Do NOT add phrases like "Here is the JSON" or "I've split..."
 - Do NOT include notes about your matching decisions
-- Do NOT list panel shapes before the JSON
+- Do NOT list panel shapes or reading order analysis before the JSON
 - Do NOT ask follow-up questions
 - Start directly with the opening bracket \`[\`
 - End with the closing bracket \`]\`

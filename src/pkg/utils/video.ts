@@ -112,12 +112,12 @@ export async function CreateVideoFromImages(
 
         const PAD_COLOR = "0xFF00FF";
 
-        // CHANGED: Reduced super-sampling from 3x to 2x
+// CHANGED: Reduced super-sampling from 3x to 2x
         const SS = 2;
         const ssW = width * SS;
         const ssH = height * SS;
 
-        // Background Processing
+// Background Processing
         if (backgroundImage) {
             const bgBase = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=${width}:${height},setsar=1`;
             const splitOuts = videoData.map((_, i) => `[bg_copy${i}]`).join("");
@@ -131,8 +131,13 @@ export async function CreateVideoFromImages(
             const keyedLabel = `keyed${i}`;
             const finalLabel = `v${i}`;
 
-            // --- A. PAD ONLY ---
-            const padFilter = `[${idx}:v]pad=${ssW}:${ssH}:(ow-iw)/2:(oh-ih)/2:color=${PAD_COLOR},setsar=1[${normalizedLabel}]`;
+            const scaleFactor = (SS + 1) / (2 * SS);
+            const targetW = Math.round(ssW * scaleFactor);
+            const targetH = Math.round(ssH * scaleFactor);
+
+            // --- A. SCALE TO REDUCED SIZE & PAD WITH TRANSPARENT BACKGROUND ---
+            const padFilter = `[${idx}:v]scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,` +
+                `format=rgba,pad=${ssW}:${ssH}:(ow-iw)/2:(oh-ih)/2:color=black@0,setsar=1[${normalizedLabel}]`;
             filterChains.push(padFilter);
 
             // --- B. EFFECT ---

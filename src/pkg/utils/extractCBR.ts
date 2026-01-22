@@ -7,6 +7,7 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import fs from 'fs';
 import path from 'path';
 import { DetectAndExtractPanels } from "./segments.ts";
+import * as pdfPoppler from 'pdf-poppler';
 
 interface Panel {
     minX: number;
@@ -33,7 +34,7 @@ export interface ExtractEvent {
     data: any;
 }
 
-type ComicFormat = 'cbr' | 'cbz' | 'cb7' | 'cbt';
+type ComicFormat = 'cbr' | 'cbz' | 'cb7' | 'cbt' | 'pdf';
 
 const imageExtensions: string[] = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'];
 
@@ -42,6 +43,7 @@ const supportedFormats: Record<ComicFormat, string> = {
     cbz: '.cbz',
     cb7: '.cb7',
     cbt: '.cbt',
+    pdf: '.pdf',
 };
 
 function getComicFormat(filePath: string): ComicFormat | null {
@@ -361,6 +363,22 @@ async function extractCBT(filePath: string, outputDir: string): Promise<number> 
     return count;
 }
 
+// Extract PDF (convert pages to images)
+async function extractPDF(filePath: string, outputDir: string): Promise<number> {
+    const opts: pdfPoppler.Options = {
+        format: 'jpeg',
+        out_dir: outputDir,
+        out_prefix: 'page',
+        page: null // convert all pages
+    };
+
+    await pdfPoppler.convert(filePath, opts);
+
+    // Count extracted files
+    const files = fs.readdirSync(outputDir);
+    return files.filter(f => f.startsWith('page') && f.endsWith('.jpg')).length;
+}
+
 async function* SliceComic(
     comicFile: string,
     dir?: string,
@@ -392,16 +410,19 @@ async function* SliceComic(
 
         switch (format) {
             case 'cbr':
-                 await extractCBR(fullPath, outputDir);
+                await extractCBR(fullPath, outputDir);
                 break;
             case 'cbz':
-                 await extractCBZ(fullPath, outputDir);
+                await extractCBZ(fullPath, outputDir);
                 break;
             case 'cb7':
-                 await extractCB7(fullPath, outputDir);
+                await extractCB7(fullPath, outputDir);
                 break;
             case 'cbt':
-                 await extractCBT(fullPath, outputDir);
+                await extractCBT(fullPath, outputDir);
+                break;
+            case 'pdf':
+                await extractPDF(fullPath, outputDir);
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
@@ -449,8 +470,8 @@ async function* SliceComic(
 
     // First, detect and extract panels from all images (deletes originals, creates overlay .png files)
     const extractPanelPromises = imageFiles.map((imagePath) =>
-        // DetectAndExtractPanels(imagePath, true)
-        detectAndCropPanels(imagePath, true)
+        DetectAndExtractPanels(imagePath, true)
+        // detectAndCropPanels(imagePath, true)
     );
     yield { event: 'update', data: { message: `detecting and extracting panels from pages` } };
     await Promise.all(extractPanelPromises);

@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Midlife Engineering // Final Corrected</title>
+    <title>Absolute</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/Draggable.min.js"></script>
     <style>
@@ -115,7 +116,8 @@
             transform: translateX(0);
         }
 
-        h1, h2 {
+        h1,
+        h2 {
             font-family: var(--font-display);
             margin: 0;
             text-transform: uppercase;
@@ -452,9 +454,11 @@
             0% {
                 opacity: 0.5;
             }
+
             50% {
                 opacity: 1;
             }
+
             100% {
                 opacity: 0.5;
             }
@@ -530,6 +534,44 @@
             font-weight: bold;
         }
 
+        .panel-image {
+            width: 100%;
+            max-width: 200px;
+            height: auto;
+            border-radius: 6px;
+            border: 1px solid #333;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .panel-image:hover {
+            transform: scale(1.02);
+            border-color: #fff;
+        }
+
+        .panel-image-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .panel-image-fullscreen img {
+            max-width: 90%;
+            max-height: 90%;
+            min-height: 50vh;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
         .close-inspector {
             cursor: pointer;
             color: #666;
@@ -576,6 +618,7 @@
         pre {
             white-space: pre-wrap;
             word-break: break-all;
+            font-size: 20px;
         }
 
         /* Console Styles */
@@ -649,6 +692,7 @@
                 opacity: 0;
                 transform: translateY(-4px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -755,491 +799,526 @@
                 display: flex;
             }
 
-            .sidebar, #viewport, #controls-hint {
+            .sidebar,
+            #viewport,
+            #controls-hint {
                 display: none !important;
             }
         }
     </style>
 </head>
+
 <body>
 
-<div id="screen-block">
-    <div class="screen-block-content">
-        <div class="screen-block-icon">⚠</div>
-        <h1>Larger Screen Required</h1>
-        <p>This application requires a minimum screen width of 1024px for optimal experience.</p>
-        <p class="screen-block-hint">Please use a desktop or laptop computer, or rotate your device to landscape
-            mode.</p>
-    </div>
-</div>
-
-<div id="left-panel" class="sidebar">
-    <div id="left-panel-controls">
-        <h1>Absolute</h1>
-        <div style="margin-top: 2rem;">
-            <span class="label">01 // Source File</span>
-            <div id="drop-zone">
-                <span id="file-name">Click to Upload .CBR</span>
-                <input type="file" id="file-input" hidden accept=".cbr,.cbz">
-            </div>
+    <div id="screen-block">
+        <div class="screen-block-content">
+            <div class="screen-block-icon">⚠</div>
+            <h1>Larger Screen Required</h1>
+            <p>This application requires a minimum screen width of 1024px for optimal experience.</p>
+            <p class="screen-block-hint">Please use a desktop or laptop computer, or rotate your device to landscape
+                mode.</p>
         </div>
-        <div style="margin-top: 1.5rem;">
-            <span class="label">02 // Voice Model</span>
-            <div class="custom-select" id="voice-component">
-                <div class="select-trigger" id="voice-trigger">
-                    <span id="voice-display">Select Voice...</span>
-                    <span>▼</span>
+    </div>
+
+    <div id="left-panel" class="sidebar">
+        <div id="left-panel-controls">
+            <h1>Absolute</h1>
+            <div style="margin-top: 2rem;">
+                <span class="label">01 // Source File</span>
+                <div id="drop-zone">
+                    <span id="file-name">Click to Upload Comic (CBR, CBZ, PDF)</span>
+                    <input type="file" id="file-input" hidden accept=".cbr,.cbz,.cb7,.cbt,.pdf">
                 </div>
-                <div class="select-options" id="voice-options"></div>
+            </div>
+            <div style="margin-top: 1.5rem;">
+                <span class="label">02 // Voice Model</span>
+                <div class="custom-select" id="voice-component">
+                    <div class="select-trigger" id="voice-trigger">
+                        <span id="voice-display">Select Voice...</span>
+                        <span>▼</span>
+                    </div>
+                    <div class="select-options" id="voice-options"></div>
+                </div>
+            </div>
+            <div style="margin-top: 1.5rem;">
+                <span class="label">03 // Direction</span>
+                <textarea id="style-input"
+                    class="input-box">Classic noir voiceover: dry, world-weary delivery.</textarea>
+            </div>
+            <div style="margin-top: 1.5rem;">
+                <span class="label">04 // Context</span>
+                <textarea id="context-input" class="input-box" style="min-height:80px;"></textarea>
+            </div>
+            <button id="run-btn" class="btn-main">Initiate Protocol</button>
+        </div>
+        <div id="console-section">
+            <div id="console-header">
+                <span><span class="console-dot" id="console-dot"></span>EVENT LOG</span>
+                <span id="clear-console" onclick="clearConsole()">CLEAR</span>
+            </div>
+            <div id="console-log">
+                <div class="empty-console">Waiting for events...</div>
             </div>
         </div>
-        <div style="margin-top: 1.5rem;">
-            <span class="label">03 // Direction</span>
-            <textarea id="style-input" class="input-box">Classic noir voiceover: dry, world-weary delivery.</textarea>
-        </div>
-        <div style="margin-top: 1.5rem;">
-            <span class="label">04 // Context</span>
-            <textarea id="context-input" class="input-box" style="min-height:80px;"></textarea>
-        </div>
-        <button id="run-btn" class="btn-main">Initiate Protocol</button>
     </div>
-    <div id="console-section">
-        <div id="console-header">
-            <span><span class="console-dot" id="console-dot"></span>EVENT LOG</span>
-            <span id="clear-console" onclick="clearConsole()">CLEAR</span>
+
+    <div id="viewport">
+        <div id="world">
+            <svg id="svg-layer"></svg>
+            <div id="nodes-layer"></div>
         </div>
-        <div id="console-log">
-            <div class="empty-console">Waiting for events...</div>
+        <div id="controls-hint">Wheel: SCROLL VERTICAL<br>Shift + Wheel: SCROLL HORIZONTAL<br>Ctrl + Wheel: ZOOM TO
+            CURSOR
         </div>
     </div>
-</div>
 
-<div id="viewport">
-    <div id="world">
-        <svg id="svg-layer"></svg>
-        <div id="nodes-layer"></div>
+    <div id="right-panel" class="sidebar">
+        <h2>
+            <span id="inspector-title">INSPECTOR</span>
+            <span class="close-inspector" onclick="toggleInspector(false)">✕</span>
+        </h2>
+        <div id="inspector-content"></div>
     </div>
-    <div id="controls-hint">Wheel: SCROLL VERTICAL<br>Shift + Wheel: SCROLL HORIZONTAL<br>Ctrl + Wheel: ZOOM TO CURSOR
-    </div>
-</div>
 
-<div id="right-panel" class="sidebar">
-    <h2>
-        <span id="inspector-title">INSPECTOR</span>
-        <span class="close-inspector" onclick="toggleInspector(false)">✕</span>
-    </h2>
-    <div id="inspector-content"></div>
-</div>
+    <script>
+        const state = { zoom: 1, x: 0, y: 0, nodes: {}, isRunning: false };
+        let abortController = null;
+        let selectedVoice = "Gacrux";
+        let eventIndex = 0;
 
-<script>
-    const state = {zoom: 1, x: 0, y: 0, nodes: {}, isRunning: false};
-    let abortController = null;
-    let selectedVoice = "Gacrux";
-    let eventIndex = 0;
+        const INSPECTABLE_IDS = ['script', 'split', 'video'];
+        const NODE_W = 320;
 
-    const INSPECTABLE_IDS = ['script', 'split', 'video'];
-    const NODE_W = 320;
+        const nodeConfig = [
+            { id: 'upload', label: 'Upload', x: 50, y: 100 },
+            { id: 'extract', label: 'Extract', x: 500, y: 100 },
+            { id: 'script', label: 'Script', x: 950, y: 100 },
+            { id: 'split', label: 'Splits', x: 500, y: 400 },
+            { id: 'speech', label: 'Speech', x: 950, y: 400 },
+            { id: 'video', label: 'Video', x: 1400, y: 250 }
+        ];
 
-    const nodeConfig = [
-        {id: 'upload', label: 'Upload', x: 50, y: 100},
-        {id: 'extract', label: 'Extract', x: 500, y: 100},
-        {id: 'script', label: 'Script', x: 950, y: 100},
-        {id: 'split', label: 'Splits', x: 500, y: 400},
-        {id: 'speech', label: 'Speech', x: 950, y: 400},
-        {id: 'video', label: 'Video', x: 1400, y: 250}
-    ];
+        const connections = [
+            ['upload', 'extract'], ['extract', 'script'],
+            ['script', 'split'], ['split', 'speech'], ['speech', 'video']
+        ];
 
-    const connections = [
-        ['upload', 'extract'], ['extract', 'script'],
-        ['script', 'split'], ['split', 'speech'], ['speech', 'video']
-    ];
+        const viewport = document.getElementById('viewport');
+        const world = document.getElementById('world');
+        const svg = document.getElementById('svg-layer');
+        const nodesLayer = document.getElementById('nodes-layer');
+        const nodeEls = {};
 
-    const viewport = document.getElementById('viewport');
-    const world = document.getElementById('world');
-    const svg = document.getElementById('svg-layer');
-    const nodesLayer = document.getElementById('nodes-layer');
-    const nodeEls = {};
+        // Fullscreen image viewer
+        function showFullscreenImage(src) {
+            const overlay = document.createElement('div');
+            overlay.className = 'panel-image-fullscreen';
+            const img = document.createElement('img');
+            img.alt = 'Panel';
+            img.onload = function () {
+                const screenHeight = window.innerHeight;
+                const minHeight = screenHeight * 0.5;
+                // If natural height is less than 50% of screen, scale up
+                if (this.naturalHeight < minHeight) {
+                    this.style.height = '50vh';
+                    this.style.width = 'auto';
+                }
+            };
+            img.src = src;
+            overlay.appendChild(img);
+            overlay.onclick = () => overlay.remove();
+            document.body.appendChild(overlay);
+        }
 
-    // Console functions
-    function logEvent(eventType, message) {
-        const consoleLog = document.getElementById('console-log');
-        const emptyMsg = consoleLog.querySelector('.empty-console');
-        if (emptyMsg) emptyMsg.remove();
+        // Console functions
+        function logEvent(eventType, message) {
+            const consoleLog = document.getElementById('console-log');
+            const emptyMsg = consoleLog.querySelector('.empty-console');
+            if (emptyMsg) emptyMsg.remove();
 
-        const now = new Date();
-        const time = now.toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-        const ms = String(now.getMilliseconds()).padStart(3, '0');
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const ms = String(now.getMilliseconds()).padStart(3, '0');
 
-        eventIndex++;
-        const entry = document.createElement('div');
-        entry.className = 'log-entry';
-        entry.innerHTML = `
+            eventIndex++;
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
         <span class="log-time">${time}.${ms}</span>
         <span class="log-event ${eventType}">${eventType}</span>
         <span class="log-message">${message}</span>
     `;
-        consoleLog.appendChild(entry);
-        consoleLog.scrollTop = consoleLog.scrollHeight;
+            consoleLog.appendChild(entry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
 
-        document.getElementById('console-dot').classList.add('active');
-        setTimeout(() => document.getElementById('console-dot').classList.remove('active'), 200);
-    }
+            document.getElementById('console-dot').classList.add('active');
+            setTimeout(() => document.getElementById('console-dot').classList.remove('active'), 200);
+        }
 
-    function clearConsole() {
-        const consoleLog = document.getElementById('console-log');
-        consoleLog.innerHTML = '<div class="empty-console">Waiting for events...</div>';
-        eventIndex = 0;
-    }
+        function clearConsole() {
+            const consoleLog = document.getElementById('console-log');
+            consoleLog.innerHTML = '<div class="empty-console">Waiting for events...</div>';
+            eventIndex = 0;
+        }
 
-    nodeConfig.forEach(n => {
-        const el = document.createElement('div');
-        const isInspectable = INSPECTABLE_IDS.includes(n.id);
-        el.className = `node ${isInspectable ? 'inspectable' : ''}`;
-        el.id = n.id;
-        el.innerHTML = `
+        nodeConfig.forEach(n => {
+            const el = document.createElement('div');
+            const isInspectable = INSPECTABLE_IDS.includes(n.id);
+            el.className = `node ${isInspectable ? 'inspectable' : ''}`;
+            el.id = n.id;
+            el.innerHTML = `
         <div class="port in"></div>
         <div class="node-header"><span class="node-title">${n.label}</span><div class="status-dot"></div></div>
         <div class="node-body"><span id="msg-${n.id}">Idle</span>${isInspectable ? '<span class="view-btn">VIEW DATA</span>' : ''}</div>
         <div class="port out"></div>
     `;
-        el.addEventListener('click', () => {
-            if (isInspectable && el.classList.contains('completed')) openInspector(n.id);
-        });
-        nodesLayer.appendChild(el);
-        nodeEls[n.id] = el;
-        gsap.set(el, {x: n.x, y: n.y});
-        Draggable.create(el, {
-            type: "x,y",
-            onDragStart: function () {
-                this.target.classList.add('drag-active');
-            },
-            onDrag: updateEdges, onThrowUpdate: updateEdges,
-            onDragEnd: function () {
-                setTimeout(() => this.target.classList.remove('drag-active'), 100);
-            }
-        });
-    });
-
-    const edgeEls = [];
-    connections.forEach((c, i) => {
-        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        p.classList.add('edge');
-        p.id = `edge-${i}`;
-        svg.appendChild(p);
-        edgeEls.push({path: p, from: c[0], to: c[1]});
-    });
-
-    function updateWorldTransform() {
-        gsap.set(world, {x: state.x, y: state.y, scale: state.zoom});
-    }
-
-    updateWorldTransform();
-
-    viewport.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        if (e.ctrlKey) {
-            const zoomSpeed = 0.001;
-            const rect = viewport.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            const worldXBefore = (mouseX - state.x) / state.zoom;
-            const worldYBefore = (mouseY - state.y) / state.zoom;
-            state.zoom = Math.max(0.2, Math.min(state.zoom - (e.deltaY * zoomSpeed), 4));
-            state.x = mouseX - (worldXBefore * state.zoom);
-            state.y = mouseY - (worldYBefore * state.zoom);
-        } else {
-            const panSpeed = 1;
-            if (e.shiftKey) state.x -= e.deltaY * panSpeed;
-            else state.y -= e.deltaY * panSpeed;
-        }
-        updateWorldTransform();
-    }, {passive: false});
-
-    function updateEdges() {
-        edgeEls.forEach(e => {
-            const f = nodeEls[e.from], t = nodeEls[e.to];
-            const fx = gsap.getProperty(f, "x"), fy = gsap.getProperty(f, "y");
-            const tx = gsap.getProperty(t, "x"), ty = gsap.getProperty(t, "y");
-            const startX = fx + NODE_W, startY = fy + 60;
-            const endX = tx, endY = ty + 60;
-            const dist = Math.abs(endX - startX) * 0.5;
-            e.path.setAttribute('d', `M ${startX} ${startY} C ${startX + dist} ${startY}, ${endX - dist} ${endY}, ${endX} ${endY}`);
-        });
-    }
-
-    updateEdges();
-
-    function centerNodesOnLoad() {
-        const sidebarWidth = window.innerWidth >= 1600 ? 600 : 420;
-        const xs = nodeConfig.map(n => n.x);
-        const ys = nodeConfig.map(n => n.y);
-        const minX = Math.min(...xs);
-        const maxY = Math.max(...ys);
-        const minY = Math.min(...ys);
-        const nodeHeight = 130;
-        const nodesVerticalCenter = (minY + maxY + nodeHeight) / 2;
-        state.x = sidebarWidth + 24 - minX;
-        state.y = (window.innerHeight / 2) - nodesVerticalCenter;
-        updateWorldTransform();
-    }
-
-    centerNodesOnLoad();
-    window.addEventListener('resize', centerNodesOnLoad);
-
-    function toggleInspector(show) {
-        document.getElementById('right-panel').classList.toggle('active', show);
-    }
-
-    function openInspector(nodeId) {
-        const data = state.nodes[nodeId];
-        const container = document.getElementById('inspector-content');
-        document.getElementById('inspector-title').innerText = `${nodeId.toUpperCase()} OUTPUT`;
-        container.innerHTML = '';
-        if (!data) {
-            container.innerHTML = '<div class="empty-state">NO DATA</div>';
-            toggleInspector(true);
-            return;
-        }
-        if (Array.isArray(data) && data[0]?.panels) {
-            data.forEach(g => {
-                let ph = '';
-                g.panels.forEach(p => {
-                    ph += `<div class="panel-row"><div class="panel-num">${p.panel}</div><div class="panel-content"><div class="panel-script">${p.script}</div>${p.effect ? `<div class="panel-effect">${p.effect.type || 'FX'}</div>` : ''}</div></div>`;
-                });
-                const d = document.createElement('div');
-                d.className = 'script-page';
-                d.innerHTML = `<div class="page-header"><span>PAGE ${g.page}</span><span>${g.panels.length} PNL</span></div>${ph}`;
-                container.appendChild(d);
+            el.addEventListener('click', () => {
+                if (isInspectable && el.classList.contains('completed')) openInspector(n.id);
             });
-        } else if (nodeId === 'video') {
-            const v = document.createElement('video');
-            v.src = data;
-            v.controls = true;
-            v.style.cssText = 'width:100%; border:1px solid #333';
-            container.appendChild(v);
-        } else {
-            const p = document.createElement('pre');
-            p.innerText = JSON.stringify(data, null, 2);
-            p.style.color = '#888';
-            container.appendChild(p);
-        }
-        toggleInspector(true);
-    }
-
-    const rawVoices = [
-        {name: "Achernar", gender: "Female", desc: "Soft"}, {name: "Achird", gender: "Male", desc: "Friendly"},
-        {name: "Algenib", gender: "Male", desc: "Gravelly"}, {name: "Algieba", gender: "Male", desc: "Smooth"},
-        {name: "Alnilam", gender: "Male", desc: "Firm"}, {name: "Aoede", gender: "Female", desc: "Breezy"},
-        {name: "Autonoe", gender: "Female", desc: "Bright"}, {name: "Callirrhoe", gender: "Female", desc: "Easy-going"},
-        {name: "Charon", gender: "Male", desc: "Informative"}, {name: "Despina", gender: "Female", desc: "Smooth"},
-        {name: "Enceladus", gender: "Male", desc: "Breathy"}, {name: "Erinome", gender: "Female", desc: "Clear"},
-        {name: "Fenrir", gender: "Male", desc: "Excitable"}, {name: "Gacrux", gender: "Female", desc: "Mature"},
-        {name: "Iapetus", gender: "Male", desc: "Clear"}, {name: "Kore", gender: "Female", desc: "Firm"},
-        {name: "Laomedeia", gender: "Female", desc: "Upbeat"}, {name: "Leda", gender: "Female", desc: "Youthful"},
-        {name: "Orus", gender: "Male", desc: "Firm"}, {name: "Puck", gender: "Male", desc: "Upbeat"},
-        {name: "Pulcherrima", gender: "Female", desc: "Forward"}, {
-            name: "Rasalgethi",
-            gender: "Male",
-            desc: "Informative"
-        },
-        {name: "Sadachbia", gender: "Male", desc: "Lively"}, {
-            name: "Sadaltager",
-            gender: "Male",
-            desc: "Knowledgeable"
-        },
-        {name: "Schedar", gender: "Male", desc: "Even"}, {name: "Sulafat", gender: "Female", desc: "Warm"},
-        {name: "Umbriel", gender: "Male", desc: "Easy-going"}, {name: "Vindemiatrix", gender: "Female", desc: "Gentle"},
-        {name: "Zephyr", gender: "Female", desc: "Bright"}, {name: "Zubenelgenubi", gender: "Male", desc: "Casual"}
-    ];
-
-    const voiceComp = document.getElementById('voice-component');
-    const voiceTrigger = document.getElementById('voice-trigger');
-    const voiceDisplay = document.getElementById('voice-display');
-    const voiceOptions = document.getElementById('voice-options');
-
-    rawVoices.forEach(v => {
-        const div = document.createElement('div');
-        div.className = 'select-option';
-        if (v.name === selectedVoice) {
-            div.classList.add('selected');
-            voiceDisplay.innerText = `${v.name} // ${v.gender} • ${v.desc}`;
-        }
-        div.innerHTML = `<span>${v.name}</span><span class="opt-meta">${v.gender} • ${v.desc}</span>`;
-        div.addEventListener('click', () => {
-            selectedVoice = v.name;
-            voiceDisplay.innerText = `${v.name} // ${v.gender} • ${v.desc}`;
-            voiceComp.classList.remove('open');
-            document.querySelectorAll('.select-option').forEach(o => o.classList.remove('selected'));
-            div.classList.add('selected');
-        });
-        voiceOptions.appendChild(div);
-    });
-
-    voiceTrigger.addEventListener('click', (e) => {
-        if (!state.isRunning) {
-            e.stopPropagation();
-            voiceComp.classList.toggle('open');
-        }
-    });
-    window.addEventListener('click', (e) => {
-        if (!voiceComp.contains(e.target)) voiceComp.classList.remove('open');
-    });
-
-    function toggleInputs(enable) {
-        document.querySelectorAll('.input-box').forEach(i => i.disabled = !enable);
-        document.getElementById('drop-zone').classList.toggle('disabled', !enable);
-        document.getElementById('voice-trigger').classList.toggle('disabled', !enable);
-    }
-
-    function updateNodeState(id, status, text) {
-        const el = nodeEls[id];
-        document.getElementById(`msg-${id}`).innerText = text || status;
-        const edgeIn = edgeEls.find(e => e.to === id);
-        if (status === 'active') {
-            el.classList.add('active');
-            el.classList.remove('completed');
-            if (edgeIn) {
-                gsap.set(edgeIn.path, {clearProps: "all"});
-                edgeIn.path.classList.add('active');
-                edgeIn.path.classList.remove('completed');
-            }
-        } else if (status === 'complete') {
-            el.classList.remove('active');
-            el.classList.add('completed');
-            el.querySelector('.status-dot').innerText = "✓";
-            if (edgeIn) {
-                edgeIn.path.classList.remove('active');
-                edgeIn.path.classList.add('completed');
-                gsap.to(edgeIn.path, {
-                    stroke: '#fff',
-                    strokeWidth: 4,
-                    strokeDasharray: "none",
-                    opacity: 1,
-                    duration: 0.5
-                });
-            }
-        } else if (status === 'reset') {
-            el.classList.remove('active', 'completed');
-            el.querySelector('.status-dot').innerText = "";
-            document.getElementById(`msg-${id}`).innerText = "Idle";
-            edgeEls.forEach(e => {
-                e.path.classList.remove('active', 'completed');
-                gsap.set(e.path, {stroke: '#333', strokeWidth: 2, strokeDasharray: "none", opacity: 1});
-            });
-        }
-    }
-
-    document.getElementById('run-btn').onclick = async function () {
-        const btn = this;
-        if (state.isRunning) {
-            if (abortController) abortController.abort();
-            state.isRunning = false;
-            toggleInputs(true);
-            btn.innerText = "Initiate Protocol";
-            btn.classList.remove('terminate');
-            Object.keys(nodeEls).forEach(k => updateNodeState(k, 'reset'));
-            logEvent('update', 'Sequence terminated by user');
-            return;
-        }
-
-        const file = document.getElementById('file-input').files[0];
-        if (!file) return alert("Select a file first.");
-
-        state.isRunning = true;
-        toggleInputs(false);
-        btn.innerText = "TERMINATE SEQUENCE";
-        btn.classList.add('terminate');
-        state.nodes = {};
-        Object.keys(nodeEls).forEach(k => updateNodeState(k, 'reset'));
-        clearConsole();
-        abortController = new AbortController();
-
-        logEvent('update', `Protocol initiated with file: ${file.name}`);
-
-        const fd = new FormData();
-        fd.append('files', file);
-        fd.append('voice', selectedVoice);
-        fd.append('voiceStyleInstruction', document.getElementById('style-input').value);
-        fd.append('context', document.getElementById('context-input').value);
-
-        try {
-            updateNodeState('upload', 'active', 'Uploading...');
-            logEvent('update', 'Uploading file...');
-            const res = await fetch('http://localhost:5000/api/v1/generate', {
-                method: 'POST', body: fd, signal: abortController.signal
-            });
-            updateNodeState('upload', 'complete', 'Done');
-            logEvent('update', 'Upload complete');
-
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (true) {
-                const {done, value} = await reader.read();
-                if (done) break;
-                const chunks = decoder.decode(value).split('\n\n');
-                for (const chunk of chunks) {
-                    if (chunk.startsWith('event:')) {
-                        const type = chunk.match(/event: (.*)/)[1];
-                        const dataStr = chunk.split('data: ')[1];
-                        if (!dataStr) continue;
-                        const data = JSON.parse(dataStr);
-
-                        logEvent(type, data.message || JSON.stringify(data).substring(0, 100));
-
-                        if (type === 'update') {
-                            const m = data.message.toLowerCase();
-                            if (m.includes('extracting')) {
-                                updateNodeState('extract', 'active', 'Extracting Images...');
-                            } else if (m.includes('detecting')) {
-                                updateNodeState('upload', 'complete');
-                                updateNodeState('extract', 'active', 'Detecting Panels...');
-                            } else if (m.includes('generating script')) {
-                                updateNodeState('extract', 'complete');
-                                updateNodeState('script', 'active', m);
-                            } else if (m.includes('splitting')) {
-                                updateNodeState('script', 'complete');
-                                updateNodeState('split', 'active', m);
-                            } else if (m.includes('speech')) {
-                                updateNodeState('split', 'complete');
-                                updateNodeState('speech', 'active', m);
-                            } else if (m === 'complete') {
-                                updateNodeState('speech', 'complete');
-                                updateNodeState('video', 'complete', 'READY');
-                                state.nodes['video'] = data.video;
-                                openInspector('video');
-                                state.isRunning = false;
-                                toggleInputs(true);
-                                btn.innerText = "Initiate Protocol";
-                                btn.classList.remove('terminate');
-                            }
-                        } else if (type === 'script') state.nodes['script'] = data.script;
-                        else if (type === 'split') state.nodes['split'] = data.splits;
-                    }
+            nodesLayer.appendChild(el);
+            nodeEls[n.id] = el;
+            gsap.set(el, { x: n.x, y: n.y });
+            Draggable.create(el, {
+                type: "x,y",
+                onDragStart: function () {
+                    this.target.classList.add('drag-active');
+                },
+                onDrag: updateEdges, onThrowUpdate: updateEdges,
+                onDragEnd: function () {
+                    setTimeout(() => this.target.classList.remove('drag-active'), 100);
                 }
+            });
+        });
+
+        const edgeEls = [];
+        connections.forEach((c, i) => {
+            const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            p.classList.add('edge');
+            p.id = `edge-${i}`;
+            svg.appendChild(p);
+            edgeEls.push({ path: p, from: c[0], to: c[1] });
+        });
+
+        function updateWorldTransform() {
+            gsap.set(world, { x: state.x, y: state.y, scale: state.zoom });
+        }
+
+        updateWorldTransform();
+
+        viewport.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.ctrlKey) {
+                const zoomSpeed = 0.001;
+                const rect = viewport.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                const worldXBefore = (mouseX - state.x) / state.zoom;
+                const worldYBefore = (mouseY - state.y) / state.zoom;
+                state.zoom = Math.max(0.2, Math.min(state.zoom - (e.deltaY * zoomSpeed), 4));
+                state.x = mouseX - (worldXBefore * state.zoom);
+                state.y = mouseY - (worldYBefore * state.zoom);
+            } else {
+                const panSpeed = 1;
+                if (e.shiftKey) state.x -= e.deltaY * panSpeed;
+                else state.y -= e.deltaY * panSpeed;
             }
-        } catch (e) {
-            if (e.name !== 'AbortError') {
-                console.error(e);
-                logEvent('error', `Error: ${e.message}`);
-                alert("Error.");
+            updateWorldTransform();
+        }, { passive: false });
+
+        function updateEdges() {
+            edgeEls.forEach(e => {
+                const f = nodeEls[e.from], t = nodeEls[e.to];
+                const fx = gsap.getProperty(f, "x"), fy = gsap.getProperty(f, "y");
+                const tx = gsap.getProperty(t, "x"), ty = gsap.getProperty(t, "y");
+                const startX = fx + NODE_W, startY = fy + 60;
+                const endX = tx, endY = ty + 60;
+                const dist = Math.abs(endX - startX) * 0.5;
+                e.path.setAttribute('d', `M ${startX} ${startY} C ${startX + dist} ${startY}, ${endX - dist} ${endY}, ${endX} ${endY}`);
+            });
+        }
+
+        updateEdges();
+
+        function centerNodesOnLoad() {
+            const sidebarWidth = window.innerWidth >= 1600 ? 600 : 420;
+            const xs = nodeConfig.map(n => n.x);
+            const ys = nodeConfig.map(n => n.y);
+            const minX = Math.min(...xs);
+            const maxY = Math.max(...ys);
+            const minY = Math.min(...ys);
+            const nodeHeight = 130;
+            const nodesVerticalCenter = (minY + maxY + nodeHeight) / 2;
+            state.x = sidebarWidth + 24 - minX;
+            state.y = (window.innerHeight / 2) - nodesVerticalCenter;
+            updateWorldTransform();
+        }
+
+        centerNodesOnLoad();
+        window.addEventListener('resize', centerNodesOnLoad);
+
+        function toggleInspector(show) {
+            document.getElementById('right-panel').classList.toggle('active', show);
+        }
+
+        function openInspector(nodeId) {
+            const data = state.nodes[nodeId];
+            const container = document.getElementById('inspector-content');
+            document.getElementById('inspector-title').innerText = `${nodeId.toUpperCase()} OUTPUT`;
+            container.innerHTML = '';
+            if (!data) {
+                container.innerHTML = '<div class="empty-state">NO DATA</div>';
+                toggleInspector(true);
+                return;
+            }
+            if (Array.isArray(data) && data[0]?.panels) {
+                data.forEach(g => {
+                    let ph = '';
+                    g.panels.forEach(p => {
+                        const panelImage = p.panelLink ? `<img class="panel-image" src="${p.panelLink}" alt="Panel ${p.panel}" data-fullscreen-src="${p.panelLink}" onerror="this.style.display='none'">` : '';
+                        ph += `<div class="panel-row"><div class="panel-num">${p.panel}</div><div class="panel-content">${panelImage}<div class="panel-script">${p.script}</div>${p.effect ? `<div class="panel-effect">${p.effect.type || 'FX'}</div>` : ''}</div></div>`;
+                    });
+                    const d = document.createElement('div');
+                    d.className = 'script-page';
+                    d.innerHTML = `<div class="page-header"><span>PAGE ${g.page}</span><span>${g.panels.length} PNL</span></div>${ph}`;
+                    container.appendChild(d);
+                });
+                // Add click event delegation for panel images
+                container.querySelectorAll('.panel-image').forEach(img => {
+                    img.addEventListener('click', function () {
+                        const src = this.getAttribute('data-fullscreen-src');
+                        if (src) showFullscreenImage(src);
+                    });
+                });
+            } else if (nodeId === 'video') {
+                const v = document.createElement('video');
+                v.src = data;
+                v.controls = true;
+                v.style.cssText = 'width:100%; border:1px solid #333';
+                container.appendChild(v);
+            } else {
+                const p = document.createElement('pre');
+                p.innerText = data;
+                p.style.color = '#888';
+                container.appendChild(p);
+            }
+            toggleInspector(true);
+        }
+
+        const rawVoices = [
+            { name: "Achernar", gender: "Female", desc: "Soft" }, { name: "Achird", gender: "Male", desc: "Friendly" },
+            { name: "Algenib", gender: "Male", desc: "Gravelly" }, { name: "Algieba", gender: "Male", desc: "Smooth" },
+            { name: "Alnilam", gender: "Male", desc: "Firm" }, { name: "Aoede", gender: "Female", desc: "Breezy" },
+            { name: "Autonoe", gender: "Female", desc: "Bright" }, { name: "Callirrhoe", gender: "Female", desc: "Easy-going" },
+            { name: "Charon", gender: "Male", desc: "Informative" }, { name: "Despina", gender: "Female", desc: "Smooth" },
+            { name: "Enceladus", gender: "Male", desc: "Breathy" }, { name: "Erinome", gender: "Female", desc: "Clear" },
+            { name: "Fenrir", gender: "Male", desc: "Excitable" }, { name: "Gacrux", gender: "Female", desc: "Mature" },
+            { name: "Iapetus", gender: "Male", desc: "Clear" }, { name: "Kore", gender: "Female", desc: "Firm" },
+            { name: "Laomedeia", gender: "Female", desc: "Upbeat" }, { name: "Leda", gender: "Female", desc: "Youthful" },
+            { name: "Orus", gender: "Male", desc: "Firm" }, { name: "Puck", gender: "Male", desc: "Upbeat" },
+            { name: "Pulcherrima", gender: "Female", desc: "Forward" }, {
+                name: "Rasalgethi",
+                gender: "Male",
+                desc: "Informative"
+            },
+            { name: "Sadachbia", gender: "Male", desc: "Lively" }, {
+                name: "Sadaltager",
+                gender: "Male",
+                desc: "Knowledgeable"
+            },
+            { name: "Schedar", gender: "Male", desc: "Even" }, { name: "Sulafat", gender: "Female", desc: "Warm" },
+            { name: "Umbriel", gender: "Male", desc: "Easy-going" }, { name: "Vindemiatrix", gender: "Female", desc: "Gentle" },
+            { name: "Zephyr", gender: "Female", desc: "Bright" }, { name: "Zubenelgenubi", gender: "Male", desc: "Casual" }
+        ];
+
+        const voiceComp = document.getElementById('voice-component');
+        const voiceTrigger = document.getElementById('voice-trigger');
+        const voiceDisplay = document.getElementById('voice-display');
+        const voiceOptions = document.getElementById('voice-options');
+
+        rawVoices.forEach(v => {
+            const div = document.createElement('div');
+            div.className = 'select-option';
+            if (v.name === selectedVoice) {
+                div.classList.add('selected');
+                voiceDisplay.innerText = `${v.name} // ${v.gender} • ${v.desc}`;
+            }
+            div.innerHTML = `<span>${v.name}</span><span class="opt-meta">${v.gender} • ${v.desc}</span>`;
+            div.addEventListener('click', () => {
+                selectedVoice = v.name;
+                voiceDisplay.innerText = `${v.name} // ${v.gender} • ${v.desc}`;
+                voiceComp.classList.remove('open');
+                document.querySelectorAll('.select-option').forEach(o => o.classList.remove('selected'));
+                div.classList.add('selected');
+            });
+            voiceOptions.appendChild(div);
+        });
+
+        voiceTrigger.addEventListener('click', (e) => {
+            if (!state.isRunning) {
+                e.stopPropagation();
+                voiceComp.classList.toggle('open');
+            }
+        });
+        window.addEventListener('click', (e) => {
+            if (!voiceComp.contains(e.target)) voiceComp.classList.remove('open');
+        });
+
+        function toggleInputs(enable) {
+            document.querySelectorAll('.input-box').forEach(i => i.disabled = !enable);
+            document.getElementById('drop-zone').classList.toggle('disabled', !enable);
+            document.getElementById('voice-trigger').classList.toggle('disabled', !enable);
+        }
+
+        function updateNodeState(id, status, text) {
+            const el = nodeEls[id];
+            document.getElementById(`msg-${id}`).innerText = text || status;
+            const edgeIn = edgeEls.find(e => e.to === id);
+            if (status === 'active') {
+                el.classList.add('active');
+                el.classList.remove('completed');
+                if (edgeIn) {
+                    gsap.set(edgeIn.path, { clearProps: "all" });
+                    edgeIn.path.classList.add('active');
+                    edgeIn.path.classList.remove('completed');
+                }
+            } else if (status === 'complete') {
+                el.classList.remove('active');
+                el.classList.add('completed');
+                el.querySelector('.status-dot').innerText = "✓";
+                if (edgeIn) {
+                    edgeIn.path.classList.remove('active');
+                    edgeIn.path.classList.add('completed');
+                    gsap.to(edgeIn.path, {
+                        stroke: '#fff',
+                        strokeWidth: 4,
+                        strokeDasharray: "none",
+                        opacity: 1,
+                        duration: 0.5
+                    });
+                }
+            } else if (status === 'reset') {
+                el.classList.remove('active', 'completed');
+                el.querySelector('.status-dot').innerText = "";
+                document.getElementById(`msg-${id}`).innerText = "Idle";
+                edgeEls.forEach(e => {
+                    e.path.classList.remove('active', 'completed');
+                    gsap.set(e.path, { stroke: '#333', strokeWidth: 2, strokeDasharray: "none", opacity: 1 });
+                });
+            }
+        }
+
+        document.getElementById('run-btn').onclick = async function () {
+            const btn = this;
+            if (state.isRunning) {
+                if (abortController) abortController.abort();
                 state.isRunning = false;
                 toggleInputs(true);
                 btn.innerText = "Initiate Protocol";
                 btn.classList.remove('terminate');
+                Object.keys(nodeEls).forEach(k => updateNodeState(k, 'reset'));
+                logEvent('update', 'Sequence terminated by user');
+                return;
             }
-        }
-    };
 
-    document.getElementById('drop-zone').onclick = () => {
-        if (!state.isRunning) document.getElementById('file-input').click();
-    };
-    document.getElementById('file-input').onchange = (e) => document.getElementById('file-name').innerText = e.target.files[0]?.name || "Select File";
-</script>
+            const file = document.getElementById('file-input').files[0];
+            if (!file) return alert("Select a file first.");
+
+            state.isRunning = true;
+            toggleInputs(false);
+            btn.innerText = "TERMINATE SEQUENCE";
+            btn.classList.add('terminate');
+            state.nodes = {};
+            Object.keys(nodeEls).forEach(k => updateNodeState(k, 'reset'));
+            clearConsole();
+            abortController = new AbortController();
+
+            logEvent('update', `Protocol initiated with file: ${file.name}`);
+
+            const fd = new FormData();
+            fd.append('files', file);
+            fd.append('voice', selectedVoice);
+            fd.append('voiceStyleInstruction', document.getElementById('style-input').value);
+            fd.append('context', document.getElementById('context-input').value);
+
+            try {
+                updateNodeState('upload', 'active', 'Uploading...');
+                logEvent('update', 'Uploading file...');
+                const res = await fetch('http://localhost:5000/api/v1/generate', {
+                    method: 'POST', body: fd, signal: abortController.signal
+                });
+                updateNodeState('upload', 'complete', 'Done');
+                logEvent('update', 'Upload complete');
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunks = decoder.decode(value).split('\n\n');
+                    for (const chunk of chunks) {
+                        if (chunk.startsWith('event:')) {
+                            const type = chunk.match(/event: (.*)/)[1];
+                            const dataStr = chunk.split('data: ')[1];
+                            if (!dataStr) continue;
+                            const data = JSON.parse(dataStr);
+
+                            logEvent(type, data.message || JSON.stringify(data).substring(0, 100));
+
+                            if (type === 'update') {
+                                const m = data.message.toLowerCase();
+                                if (m.includes('extracting')) {
+                                    updateNodeState('extract', 'active', 'Extracting Images...');
+                                } else if (m.includes('detecting')) {
+                                    updateNodeState('upload', 'complete');
+                                    updateNodeState('extract', 'active', 'Detecting Panels...');
+                                } else if (m.includes('generating script')) {
+                                    updateNodeState('extract', 'complete');
+                                    updateNodeState('script', 'active', m);
+                                } else if (m.includes('splitting')) {
+                                    updateNodeState('script', 'complete');
+                                    updateNodeState('split', 'active', m);
+                                } else if (m.includes('speech')) {
+                                    updateNodeState('split', 'complete');
+                                    updateNodeState('speech', 'active', m);
+                                } else if (m === 'complete') {
+                                    updateNodeState('speech', 'complete');
+                                    updateNodeState('video', 'complete', 'READY');
+                                    state.nodes['video'] = data.video;
+                                    openInspector('video');
+                                    state.isRunning = false;
+                                    toggleInputs(true);
+                                    btn.innerText = "Initiate Protocol";
+                                    btn.classList.remove('terminate');
+                                }
+                            } else if (type === 'script') state.nodes['script'] = data.script;
+                            else if (type === 'split') state.nodes['split'] = data.splits;
+                        }
+                    }
+                }
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.error(e);
+                    logEvent('error', `Error: ${e.message}`);
+                    alert("Error.");
+                    state.isRunning = false;
+                    toggleInputs(true);
+                    btn.innerText = "Initiate Protocol";
+                    btn.classList.remove('terminate');
+                }
+            }
+        };
+
+        document.getElementById('drop-zone').onclick = () => {
+            if (!state.isRunning) document.getElementById('file-input').click();
+        };
+        document.getElementById('file-input').onchange = (e) => document.getElementById('file-name').innerText = e.target.files[0]?.name || "Select File";
+    </script>
 </body>
+
 </html>
