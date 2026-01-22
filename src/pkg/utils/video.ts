@@ -8,7 +8,8 @@ export type Effect =
     | "panLeft"
     | "panRight"
     | "panUp"
-    | "panDown";
+    | "panDown"
+    | "none";
 
 export const OppositeEffect: Record<Effect, Effect> = {
     zoomIn: "zoomOut",
@@ -17,6 +18,7 @@ export const OppositeEffect: Record<Effect, Effect> = {
     panRight: "panLeft",
     panUp: "panDown",
     panDown: "panUp",
+    none: "none",
 };
 
 export interface VideoData {
@@ -25,15 +27,6 @@ export interface VideoData {
     effect?: Effect;
 }
 
-/**
- * Helper to generate the specific zoompan filter string.
- *
- * NEW LOGIC:
- * - Input is upscaled 2x before zoompan
- * - z=2 shows the center portion (original image filling frame)
- * - z=1 shows full canvas (image at half size with padding)
- * - This ensures we NEVER zoom past the original resolution
- */
 function getEffectFilter(
     effect: Effect | undefined,
     duration: number,
@@ -80,44 +73,49 @@ export async function CreateVideoFromImages(
         width?: number;
         height?: number;
         backgroundImage?: string;
-        hwAccel?: 'nvidia' | 'apple' | 'none';  // NEW: hardware acceleration option
+        hwAccel?: 'nvidia' | 'apple' | 'none';
+        transitionDuration?: number;
+        transitionEffect?: 'fade' | 'wipeleft' | 'wiperight' | 'wipeup' | 'wipedown' | 'slideleft' | 'slideright' | 'slideup' | 'slidedown' | 'dissolve';
     } = {}
 ): Promise<void> {
     const {
-        fps = 30,           // CHANGED: 24fps instead of 30
+        fps = 30,
         width = 1920,
         height = 1080,
         backgroundImage,
-        hwAccel = 'none'    // NEW: default to software encoding
+        hwAccel = 'none',
+        transitionDuration = 0.5,
+        transitionEffect = 'fade'
     } = options;
 
     if (videoData.length === 0) {
         throw new Error("videoData array cannot be empty");
     }
 
+    // Validate transition duration
+    const minDuration = Math.min(...videoData.map(d => d.duration));
+    if (transitionDuration >= minDuration) {
+        throw new Error(`Transition duration (${transitionDuration}s) must be less than the shortest clip duration (${minDuration}s)`);
+    }
+
     return new Promise((resolve, reject) => {
         let command = ffmpeg();
 
-        // 1. Input Handling
         if (backgroundImage) {
             command = command.input(backgroundImage).inputOptions(["-loop 1"]);
         }
 
-        videoData.forEach(({panel}) => {
+        videoData.forEach(({ panel }) => {
             command = command.input(panel);
         });
 
-        // 2. Filter Construction
         let filterChains: string[] = [];
 
         const PAD_COLOR = "0xFF00FF";
-
-// CHANGED: Reduced super-sampling from 3x to 2x
-        const SS = 2;
+        const SS = 3;
         const ssW = width * SS;
         const ssH = height * SS;
 
-// Background Processing
         if (backgroundImage) {
             const bgBase = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=${width}:${height},setsar=1`;
             const splitOuts = videoData.map((_, i) => `[bg_copy${i}]`).join("");
@@ -131,27 +129,23 @@ export async function CreateVideoFromImages(
             const keyedLabel = `keyed${i}`;
             const finalLabel = `v${i}`;
 
-            const scaleFactor = (SS + 1) / (2 * SS);
-            const targetW = Math.round(ssW * scaleFactor);
-            const targetH = Math.round(ssH * scaleFactor);
+            // Extend duration for all clips except the last to account for crossfade
+            // This ensures total video duration = sum of original durations
+            const isLastClip = i === videoData.length - 1;
+            const effectiveDuration = isLastClip ? data.duration : data.duration + transitionDuration;
 
-            // --- A. SCALE TO REDUCED SIZE & PAD WITH TRANSPARENT BACKGROUND ---
-            const padFilter = `[${idx}:v]scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,` +
-                `format=rgba,pad=${ssW}:${ssH}:(ow-iw)/2:(oh-ih)/2:color=black@0,setsar=1[${normalizedLabel}]`;
+            const padFilter = `[${idx}:v]scale=${ssW}:${ssH}:force_original_aspect_ratio=decrease,` +
+                `pad=${ssW}:${ssH}:(ow-iw)/2:(oh-ih)/2:color=${PAD_COLOR},setsar=1[${normalizedLabel}]`;
             filterChains.push(padFilter);
 
-            // --- B. EFFECT ---
-            const effectParams = getEffectFilter(data.effect, data.duration, fps);
-            const highResZoomCmd = `zoompan=${effectParams}:d=${Math.ceil(data.duration * fps)}:s=${ssW}x${ssH}:fps=${fps}[${effectLabel}]`;
+            const effectParams = getEffectFilter(data.effect, effectiveDuration, fps);
+            const highResZoomCmd = `zoompan=${effectParams}:d=${Math.ceil(effectiveDuration * fps)}:s=${ssW}x${ssH}:fps=${fps}[${effectLabel}]`;
             filterChains.push(`[${normalizedLabel}]${highResZoomCmd}`);
 
-            // --- C. KEYING & DOWNSCALING ---
-            // CHANGED: Using fast_bilinear instead of lanczos
             const finalizeFilters = `[${effectLabel}]colorkey=${PAD_COLOR}:0.3:0.1,` +
                 `scale=${width}:${height}:flags=fast_bilinear[${keyedLabel}]`;
             filterChains.push(finalizeFilters);
 
-            // --- D. COMPOSITION ---
             if (backgroundImage) {
                 filterChains.push(`[bg_copy${i}][${keyedLabel}]overlay=(W-w)/2:(H-h)/2:shortest=1[${finalLabel}]`);
             } else {
@@ -159,16 +153,35 @@ export async function CreateVideoFromImages(
             }
         });
 
-        // 3. Concatenation
-        const concatInputs = videoData.map((_, i) => `[v${i}]`).join("");
-        filterChains.push(`${concatInputs}concat=n=${videoData.length}:v=1:a=0[outv]`);
+        // Build crossfade chain if more than one clip
+        if (videoData.length === 1) {
+            filterChains.push(`[v0]copy[outv]`);
+        } else {
+            // Chain xfade filters for crossfade transitions
+            // Offset for transition i→i+1 = sum of original durations d0..di
+            let cumulativeOffset = 0;
+
+            for (let i = 0; i < videoData.length - 1; i++) {
+                cumulativeOffset += videoData[i]?.duration!;
+
+                const inputA = i === 0 ? `[v0]` : `[xfade${i - 1}]`;
+                const inputB = `[v${i + 1}]`;
+                const outputLabel = i === videoData.length - 2 ? `[outv]` : `[xfade${i}]`;
+
+                // Offset is where the transition STARTS in the output timeline
+                const offset = cumulativeOffset - transitionDuration;
+
+                filterChains.push(
+                    `${inputA}${inputB}xfade=transition=${transitionEffect}:duration=${transitionDuration}:offset=${offset}${outputLabel}`
+                );
+            }
+        }
 
         const filterComplex = filterChains.join("; ");
 
-        // CHANGED: Build output options based on hardware acceleration
         const baseOutputOptions = [
             "-map [outv]",
-            "-threads 0",           // NEW: Use all CPU cores
+            "-threads 0",
             `-r ${fps}`,
             "-pix_fmt yuv420p",
             "-movflags +faststart"
@@ -179,7 +192,7 @@ export async function CreateVideoFromImages(
             case 'nvidia':
                 encoderOptions = [
                     "-c:v h264_nvenc",
-                    "-preset p1",       // Fastest NVENC preset
+                    "-preset p1",
                     "-rc vbr",
                     "-cq 26"
                 ];
@@ -194,8 +207,8 @@ export async function CreateVideoFromImages(
                 encoderOptions = [
                     "-c:v libx264",
                     "-preset ultrafast",
-                    "-tune fastdecode",  // NEW: Optimize for fast decoding
-                    "-crf 26"            // CHANGED: 26 instead of 23
+                    "-tune fastdecode",
+                    "-crf 26"
                 ];
         }
 
@@ -214,7 +227,6 @@ export async function CreateVideoFromImages(
     });
 }
 
-// Rest of file unchanged...
 export async function MergeAudioToVideo(
     videoPath: string,
     audioPath: string,
@@ -225,7 +237,7 @@ export async function MergeAudioToVideo(
         volume?: number;
     } = {}
 ): Promise<void> {
-    const {audioFade = true, loop = false, volume = 1.0} = options;
+    const { audioFade = true, loop = false, volume = 1.0 } = options;
 
     return new Promise((resolve, reject) => {
         let cmd = ffmpeg().input(videoPath).input(audioPath);
@@ -293,33 +305,51 @@ export async function MergeAudioToVideo(
     });
 }
 
-export async function CreateSlideshow(
-    imagePaths: string[],
-    videoPath: string,
-    durationPerImage: number,
-    options: {
-        fps?: number;
-        width?: number;
-        height?: number;
-    } = {}
-): Promise<void> {
-    if (imagePaths.length === 0) {
-        throw new Error("imagePaths array cannot be empty");
-    }
+function getVideoDuration(videoPath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(videoPath, (err, metadata) => {
+            if (err) {
+                reject(new Error(`Failed to probe ${videoPath}: ${err.message}`));
+                return;
+            }
+            const duration = metadata.format.duration;
+            if (typeof duration !== 'number') {
+                reject(new Error(`Could not determine duration for ${videoPath}`));
+                return;
+            }
+            resolve(duration);
+        });
+    });
+}
 
-    const videoData: VideoData[] = imagePaths.map((imagePath) => ({
-        panel: imagePath,
-        duration: durationPerImage,
-        effect: "zoomIn",
-    }));
-
-    return CreateVideoFromImages(videoData, videoPath, options);
+function hasAudioStream(videoPath: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(videoPath, (err, metadata) => {
+            if (err) {
+                reject(new Error(`Failed to probe ${videoPath}: ${err.message}`));
+                return;
+            }
+            const hasAudio = metadata.streams.some(s => s.codec_type === 'audio');
+            resolve(hasAudio);
+        });
+    });
 }
 
 export async function MergeVideos(
     videoPaths: string[],
-    outputPath: string
+    outputPath: string,
+    options: {
+        transitionDuration?: number;
+        transitionEffect?: 'fade' | 'wipeleft' | 'wiperight' | 'wipeup' | 'wipedown' | 'slideleft' | 'slideright' | 'slideup' | 'slidedown' | 'dissolve' | 'smoothleft' | 'smoothright' | 'circleopen' | 'circleclose';
+        hwAccel?: 'nvidia' | 'apple' | 'none';
+    } = {}
 ): Promise<void> {
+    const {
+        transitionDuration = 0.5,
+        transitionEffect = 'fade',
+        hwAccel = 'none'
+    } = options;
+
     if (videoPaths.length === 0) {
         throw new Error("videoPaths array cannot be empty");
     }
@@ -329,34 +359,96 @@ export async function MergeVideos(
         return;
     }
 
-    const tempListPath = path.join(path.dirname(outputPath), `concat_list_${Date.now()}.txt`);
-    const fileListContent = videoPaths
-        .map((videoPath) => `file '${videoPath.replace(/'/g, "'\\''")}'`)
-        .join("\n");
+    // Get durations of all videos
+    const durations = await Promise.all(videoPaths.map(getVideoDuration));
 
-    await fs.promises.writeFile(tempListPath, fileListContent);
+    // Check if all videos have audio
+    const audioChecks = await Promise.all(videoPaths.map(hasAudioStream));
+    const hasAudio = audioChecks.every(has => has);
+
+    // Validate transition duration
+    const minDuration = Math.min(...durations);
+    if (transitionDuration >= minDuration) {
+        throw new Error(`Transition duration (${transitionDuration}s) must be less than shortest video (${minDuration}s)`);
+    }
 
     return new Promise((resolve, reject) => {
-        ffmpeg()
-            .input(tempListPath)
-            .inputOptions(["-f concat", "-safe 0"])
-            .outputOptions(["-c copy"])
+        let command = ffmpeg();
+
+        // Add all video inputs
+        videoPaths.forEach(videoPath => {
+            command = command.input(videoPath);
+        });
+
+        const filterChains: string[] = [];
+        const numVideos = videoPaths.length;
+
+        // Build xfade chain for video
+        let cumulativeDuration = 0;
+
+        for (let i = 0; i < numVideos - 1; i++) {
+            cumulativeDuration += durations[i]!;
+
+            const inputA = i === 0 ? `[0:v]` : `[vfade${i - 1}]`;
+            const inputB = `[${i + 1}:v]`;
+            const outputLabel = i === numVideos - 2 ? `[outv]` : `[vfade${i}]`;
+
+            // Offset accounts for previous transitions already "consuming" time
+            const offset = cumulativeDuration - transitionDuration * (i + 1);
+
+            filterChains.push(
+                `${inputA}${inputB}xfade=transition=${transitionEffect}:duration=${transitionDuration}:offset=${offset.toFixed(3)}${outputLabel}`
+            );
+        }
+
+        // Build acrossfade chain for audio if present
+        if (hasAudio) {
+            for (let i = 0; i < numVideos - 1; i++) {
+                const inputA = i === 0 ? `[0:a]` : `[afade${i - 1}]`;
+                const inputB = `[${i + 1}:a]`;
+                const outputLabel = i === numVideos - 2 ? `[outa]` : `[afade${i}]`;
+
+                filterChains.push(
+                    `${inputA}${inputB}acrossfade=d=${transitionDuration}:c1=tri:c2=tri${outputLabel}`
+                );
+            }
+        }
+
+        const filterComplex = filterChains.join("; ");
+
+        // Output options
+        const outputOptions: string[] = [
+            "-map [outv]",
+            ...(hasAudio ? ["-map [outa]"] : []),
+            "-movflags +faststart"
+        ];
+
+        // Video encoder options based on hardware acceleration
+        let videoEncoderOptions: string[];
+        switch (hwAccel) {
+            case 'nvidia':
+                videoEncoderOptions = ["-c:v h264_nvenc", "-preset p4", "-rc vbr", "-cq 23"];
+                break;
+            case 'apple':
+                videoEncoderOptions = ["-c:v h264_videotoolbox", "-q:v 65"];
+                break;
+            default:
+                videoEncoderOptions = ["-c:v libx264", "-preset fast", "-crf 23"];
+        }
+
+        const audioEncoderOptions = hasAudio ? ["-c:a aac", "-b:a 192k"] : [];
+
+        command
+            .complexFilter(filterComplex)
+            .outputOptions([...outputOptions, ...videoEncoderOptions, ...audioEncoderOptions])
             .output(outputPath)
             .on("start", (cmd) => console.log("FFmpeg merge command:", cmd))
             .on("progress", (progress) => console.log(`Merging videos: ${progress.percent?.toFixed(1)}% done`))
-            .on("end", async () => {
-                try {
-                    await fs.promises.unlink(tempListPath);
-                } catch (e) {
-                }
+            .on("end", () => {
                 console.log("Videos merged successfully:", outputPath);
                 resolve();
             })
-            .on("error", async (err) => {
-                try {
-                    await fs.promises.unlink(tempListPath);
-                } catch (e) {
-                }
+            .on("error", (err) => {
                 reject(new Error(`FFmpeg merge error: ${err.message}`));
             })
             .run();

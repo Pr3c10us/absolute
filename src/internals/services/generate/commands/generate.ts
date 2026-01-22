@@ -153,7 +153,6 @@ export default class Generate {
 
                 const batchResults = await Promise.all(batchPromises);
 
-                // Prepare video processing data for each result
                 const videoProcessingTasks: {
                     originalIndex: number;
                     pageGroup: PageGroup;

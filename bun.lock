@@ -10,6 +10,7 @@
         "@bull-board/api": "^6.12.7",
         "@bull-board/express": "^6.12.7",
         "@google/genai": "1.17.0",
+        "@techstark/opencv-js": "^4.12.0-release.1",
         "@types/adm-zip": "^0.5.7",
         "@types/fluent-ffmpeg": "^2.1.28",
         "@types/jsonwebtoken": "^9.0.10",
@@ -429,6 +430,8 @@
     "@supabase/storage-js": ["@supabase/storage-js@2.90.1", "", { "dependencies": { "iceberg-js": "^0.8.1", "tslib": "2.8.1" } }, "sha512-GHY+Ps/K/RBfRj7kwx+iVf2HIdqOS43rM2iDOIDpapyUnGA9CCBFzFV/XvfzznGykd//z2dkGZhlZZprsVFqGg=="],
 
     "@supabase/supabase-js": ["@supabase/supabase-js@2.90.1", "", { "dependencies": { "@supabase/auth-js": "2.90.1", "@supabase/functions-js": "2.90.1", "@supabase/postgrest-js": "2.90.1", "@supabase/realtime-js": "2.90.1", "@supabase/storage-js": "2.90.1" } }, "sha512-U8KaKGLUgTIFHtwEW1dgw1gK7XrdpvvYo7nzzqPx721GqPe8WZbAiLh/hmyKLGBYQ/mmQNr20vU9tWSDZpii3w=="],
+
+    "@techstark/opencv-js": ["@techstark/opencv-js@4.12.0-release.1", "", {}, "sha512-LtTaph9v/HqLPXEg3m1xs2h7QJh10pUpuDT0nj8g77lelWnTwwQrehtd+fXElLOdrkqc4Fea6Z/sJBvEJLYPfw=="],
 
     "@tootallnate/once": ["@tootallnate/once@1.1.2", "", {}, "sha512-RbzJvlNzmRq5c3O09UipeuXno4tA1FE6ikOjxZK0tuxVv3412l64l5t1W5pj4+rJq9vpkm/kwiR07aZXnsKPxw=="],
 
