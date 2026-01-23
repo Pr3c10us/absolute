@@ -1,6 +1,5 @@
 import ffmpeg from "fluent-ffmpeg";
 import * as fs from "fs";
-import * as path from "path";
 
 export type Effect =
     | "zoomIn"
@@ -11,15 +10,6 @@ export type Effect =
     | "panDown"
     | "none";
 
-export const OppositeEffect: Record<Effect, Effect> = {
-    zoomIn: "zoomOut",
-    zoomOut: "zoomIn",
-    panLeft: "panRight",
-    panRight: "panLeft",
-    panUp: "panDown",
-    panDown: "panUp",
-    none: "none",
-};
 
 export interface VideoData {
     panel: string;
@@ -129,8 +119,6 @@ export async function CreateVideoFromImages(
             const keyedLabel = `keyed${i}`;
             const finalLabel = `v${i}`;
 
-            // Extend duration for all clips except the last to account for crossfade
-            // This ensures total video duration = sum of original durations
             const isLastClip = i === videoData.length - 1;
             const effectiveDuration = isLastClip ? data.duration : data.duration + transitionDuration;
 
@@ -153,12 +141,9 @@ export async function CreateVideoFromImages(
             }
         });
 
-        // Build crossfade chain if more than one clip
         if (videoData.length === 1) {
             filterChains.push(`[v0]copy[outv]`);
         } else {
-            // Chain xfade filters for crossfade transitions
-            // Offset for transition i→i+1 = sum of original durations d0..di
             let cumulativeOffset = 0;
 
             for (let i = 0; i < videoData.length - 1; i++) {
@@ -168,7 +153,6 @@ export async function CreateVideoFromImages(
                 const inputB = `[v${i + 1}]`;
                 const outputLabel = i === videoData.length - 2 ? `[outv]` : `[xfade${i}]`;
 
-                // Offset is where the transition STARTS in the output timeline
                 const offset = cumulativeOffset - transitionDuration;
 
                 filterChains.push(
@@ -359,14 +343,11 @@ export async function MergeVideos(
         return;
     }
 
-    // Get durations of all videos
     const durations = await Promise.all(videoPaths.map(getVideoDuration));
 
-    // Check if all videos have audio
     const audioChecks = await Promise.all(videoPaths.map(hasAudioStream));
     const hasAudio = audioChecks.every(has => has);
 
-    // Validate transition duration
     const minDuration = Math.min(...durations);
     if (transitionDuration >= minDuration) {
         throw new Error(`Transition duration (${transitionDuration}s) must be less than shortest video (${minDuration}s)`);
@@ -375,7 +356,6 @@ export async function MergeVideos(
     return new Promise((resolve, reject) => {
         let command = ffmpeg();
 
-        // Add all video inputs
         videoPaths.forEach(videoPath => {
             command = command.input(videoPath);
         });
@@ -383,7 +363,6 @@ export async function MergeVideos(
         const filterChains: string[] = [];
         const numVideos = videoPaths.length;
 
-        // Build xfade chain for video
         let cumulativeDuration = 0;
 
         for (let i = 0; i < numVideos - 1; i++) {
@@ -393,7 +372,6 @@ export async function MergeVideos(
             const inputB = `[${i + 1}:v]`;
             const outputLabel = i === numVideos - 2 ? `[outv]` : `[vfade${i}]`;
 
-            // Offset accounts for previous transitions already "consuming" time
             const offset = cumulativeDuration - transitionDuration * (i + 1);
 
             filterChains.push(
@@ -401,29 +379,32 @@ export async function MergeVideos(
             );
         }
 
-        // Build acrossfade chain for audio if present
         if (hasAudio) {
-            for (let i = 0; i < numVideos - 1; i++) {
-                const inputA = i === 0 ? `[0:a]` : `[afade${i - 1}]`;
-                const inputB = `[${i + 1}:a]`;
-                const outputLabel = i === numVideos - 2 ? `[outa]` : `[afade${i}]`;
+            const numTransitions = numVideos - 1;
+            const totalTrimNeeded = transitionDuration * numTransitions;
+            const trimPerClip = totalTrimNeeded / numVideos;
 
+            const audioFade = 0.03; // 30ms fade to prevent clicks
+
+            for (let i = 0; i < numVideos; i++) {
+                const audioDur = durations[i]! - trimPerClip;
                 filterChains.push(
-                    `${inputA}${inputB}acrossfade=d=${transitionDuration}:c1=tri:c2=tri${outputLabel}`
+                    `[${i}:a]atrim=0:${audioDur.toFixed(3)},afade=t=out:st=${(audioDur - audioFade).toFixed(3)}:d=${audioFade}[a${i}]`
                 );
             }
+
+            const audioInputs = Array.from({ length: numVideos }, (_, i) => `[a${i}]`).join('');
+            filterChains.push(`${audioInputs}concat=n=${numVideos}:v=0:a=1[outa]`);
         }
 
         const filterComplex = filterChains.join("; ");
 
-        // Output options
         const outputOptions: string[] = [
             "-map [outv]",
             ...(hasAudio ? ["-map [outa]"] : []),
             "-movflags +faststart"
         ];
 
-        // Video encoder options based on hardware acceleration
         let videoEncoderOptions: string[];
         switch (hwAccel) {
             case 'nvidia':

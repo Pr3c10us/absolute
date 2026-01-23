@@ -105,7 +105,7 @@ async function addPageNumberToOverlay(imagePath: string, pageNumber: number): Pr
     fs.renameSync(tempPath, imagePath);
 }
 
-async function extractCBR(filePath: string, outputDir: string): Promise<number> {
+async function extract(filePath: string, outputDir: string): Promise<number> {
     const extractor = await createExtractorFromFile({
         filepath: filePath,
         targetPath: outputDir,
@@ -223,7 +223,7 @@ async function* SliceComic(
 
         switch (format) {
             case 'cbr':
-                await extractCBR(fullPath, outputDir);
+                await extract(fullPath, outputDir);
                 break;
             case 'cbz':
                 await extractCBZ(fullPath, outputDir);

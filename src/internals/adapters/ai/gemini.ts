@@ -104,29 +104,6 @@ export default class GeminiAI implements AIRepository {
         return {uri: uploadedFile.uri, mimeType: uploadedFile.mimeType};
     }
 
-    async generateAudio(text: string, voice?: Voice): Promise<AIResponse> {
-        const model = this.appSecrets.geminiConfiguration.audioModel;
-        const response = await this.ai.models.generateContent({
-            model,
-            contents: [{parts: [{text}]}],
-            config: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: {voiceName: voice || "Algieba"},
-                    },
-                },
-            },
-        });
-
-        const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!data) throw new Error("Failed to generate audio");
-
-        const dollars = this.calculateCost(model, response, "audio");
-
-        return {response: data, dollars};
-    }
-
     async generateAudioLive(text: string, voice?: Voice, maxRetries: number = 3): Promise<AIResponse> {
         const model = this.appSecrets.geminiConfiguration.liveModel;
 

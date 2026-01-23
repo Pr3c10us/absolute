@@ -2,7 +2,7 @@ import {type Request, type Response, Router, type NextFunction} from "express";
 
 import multer from "multer";
 import {UploadCleanupFiles, UploadErrorCleanup} from "../middlewares/upload.ts";
-import ExtractCBR from "../../../../pkg/utils/extractCBR.ts";
+import ExtractCBR from "../../../../pkg/utils/extract.ts";
 import GenerateServices from "../../../services/generate/generate.ts";
 
 export default class GenerateHandler {

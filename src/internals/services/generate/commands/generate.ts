@@ -5,21 +5,18 @@ import {readdir} from "fs/promises";
 import {join} from "path";
 import mime from "mime";
 import {SplitScriptPrompt} from "../../../../pkg/prompts/split.ts";
-import SliceComic from "../../../../pkg/utils/extractCBR.ts";
+import SliceComic from "../../../../pkg/utils/extract.ts";
 import {WithRetry} from "../../../../pkg/utils/retry.ts";
 import type {UploadedFile, Voice} from "../../../domains/ai";
-import {
-    SaveWaveFile
-} from "../../../../pkg/utils/audio";
 import {
     CreateVideoFromImages,
     MergeAudioToVideo,
     MergeVideos,
     type Effect,
-    OppositeEffect
 } from "../../../../pkg/utils/video.ts";
 import {AudioPrompt} from "../../../../pkg/prompts/live.ts";
 import {ScriptPrompt} from "../../../../pkg/prompts/script.ts";
+import wav from "wav";
 
 type ScriptPagePanel = {
     page: number;
@@ -197,7 +194,7 @@ export default class Generate {
                     const iDir = path.resolve(dir, name);
                     const audioPath = path.join(iDir, `audio.wav`);
                     const mergedAudio = Buffer.concat(audioBuffers);
-                    await SaveWaveFile(audioPath, mergedAudio);
+                    await this.SaveWaveFile(audioPath, mergedAudio);
 
                     const videoPath = path.join(iDir, `video_no_audio.mp4`);
                     const coverBlurPath = path.join(dir, 'cover_blur.jpg');
@@ -216,12 +213,11 @@ export default class Generate {
                     });
                 }
 
-                const batchSize = 5;
+                const VIDEO_BATCH_SIZE = this.appSecrets.batchSize;
 
-                for (let i = 0; i < videoProcessingTasks.length; i += batchSize) {
-                    const batch = videoProcessingTasks.slice(i, i + batchSize);
+                for (let i = 0; i < videoProcessingTasks.length; i += VIDEO_BATCH_SIZE) {
+                    const batch = videoProcessingTasks.slice(i, i + VIDEO_BATCH_SIZE);
 
-                    // Process batch in parallel
                     const results = await Promise.all(batch.map(async (task) => {
                         await WithRetry(() => CreateVideoFromImages(task.videoData, task.videoPath, {
                             fps: 30,
@@ -243,7 +239,6 @@ export default class Generate {
                         return task;
                     }));
 
-                    // After batch completes, yield events and collect results
                     for (const task of results) {
                         totalDorris += task.totalDollars;
                         yield {event: "update", data: {message: `speech generated for page ${task.pageGroup.page}`}};
@@ -278,6 +273,28 @@ export default class Generate {
     private generateSilence(durationSeconds: number, sampleRate = 24000, channels = 1, bytesPerSample = 2): Buffer {
         const numSamples = Math.floor(durationSeconds * sampleRate * channels);
         return Buffer.alloc(numSamples * bytesPerSample, 0);
+    }
+
+    SaveWaveFile(
+        filename: any,
+        pcmData: any,
+        channels = 1,
+        rate = 24000,
+        sampleWidth = 2,
+    ) {
+        return new Promise((resolve, reject) => {
+            const writer = new wav.FileWriter(filename, {
+                channels,
+                sampleRate: rate,
+                bitDepth: sampleWidth * 8,
+            });
+
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+
+            writer.write(pcmData);
+            writer.end();
+        });
     }
 
     private async countPanelsInFolder(panelDir: string): Promise<number> {
@@ -359,7 +376,6 @@ export default class Generate {
                 });
             }
 
-            // Get the image name for this page to construct panel link
             const image = images[item.page - 1];
             const imageName = image ? path.parse(image.path).name : '';
             const panelLink = `${baseUrl}/results/${uniqueSuffix}/${imageName}/${item.panel}.jpg`;
@@ -373,45 +389,6 @@ export default class Generate {
         }
 
         return Array.from(pageMap.values()).sort((a, b) => a.page - b.page);
-    }
-
-    private enforceEffectAlternation(panels: { script: string; panel: number; effect: Effect }[]): {
-        script: string;
-        panel: number;
-        effect: Effect
-    }[] {
-        if (!panels || panels.length === 0) return [];
-
-        const firstPanel = panels[0];
-        if (!firstPanel) return [];
-
-        const result: { script: string; panel: number; effect: Effect }[] = [{
-            script: firstPanel.script,
-            panel: firstPanel.panel,
-            effect: firstPanel.effect,
-        }];
-
-        for (let i = 1; i < panels.length; i++) {
-            const current = panels[i];
-            const previous = result[i - 1];
-
-            if (!current || !previous) continue;
-
-            if (current.panel === previous.panel) {
-                result.push({
-                    script: current.script,
-                    panel: current.panel,
-                    effect: OppositeEffect[previous.effect],
-                });
-            } else {
-                result.push({
-                    script: current.script,
-                    panel: current.panel,
-                    effect: current.effect,
-                });
-            }
-        }
-        return result;
     }
 
     private mergeScriptSplits(panels: { script: string; panel: number; effect: Effect }[]): {
