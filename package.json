@@ -5,9 +5,6 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun run --watch --no-clear-screen src/index.ts ",
-    "migrate": "node ./migrate.cjs migrate",
-    "migrate:rollback": "node ./migrate.cjs rollback",
-    "migrate:create": "node ./migrate.cjs create"
   },
   "private": true,
   "devDependencies": {
