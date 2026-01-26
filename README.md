@@ -1,11 +1,15 @@
 # Absolute
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Pr3c10us/absolute/main/ui.png" alt="Absolute" width="400">
+</p>
+
 ## Prerequisites
 
 Ensure you have the following installed on your system:
 
-- **[Bun](https://bun.sh/)** (latest)
-- **FFmpeg** (Optional, `ffmpeg-static` is included but system install recommended if issues arise)
+- **[Bun](https://bun.sh/)**
+- **[FFmpeg](https://www.ffmpeg.org)**
 
 ## Installation
 
@@ -57,4 +61,6 @@ Ensure you have the following installed on your system:
     ```bash
     bun start
     ```
+
+Once the server is started, you can access the UI at http://localhost:5000.
 
