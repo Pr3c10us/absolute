@@ -1,7 +1,7 @@
 # Absolute
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Pr3c10us/absolute/main/ui.png" alt="Absolute" width="400">
+  <img src="https://raw.githubusercontent.com/Pr3c10us/absolute/main/ui.png" alt="Absolute" width="2556">
 </p>
 
 ## Prerequisites
