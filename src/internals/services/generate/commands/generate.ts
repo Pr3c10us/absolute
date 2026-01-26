@@ -213,7 +213,7 @@ export default class Generate {
                     });
                 }
 
-                const VIDEO_BATCH_SIZE = this.appSecrets.batchSize;
+                const VIDEO_BATCH_SIZE = this.appSecrets.videoBatchSize;
 
                 for (let i = 0; i < videoProcessingTasks.length; i += VIDEO_BATCH_SIZE) {
                     const batch = videoProcessingTasks.slice(i, i + VIDEO_BATCH_SIZE);
